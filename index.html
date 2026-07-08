@@ -99,7 +99,7 @@
     <div class="top-nav">
       <div>
         <h1>학생 갈등 조정 도구</h1>
-        <div class="sub">효니 전용 · 학생에게는 승인된 결과만 전달돼</div>
+        <div class="sub">교사 전용 · 학생에게는 승인된 결과만 전달돼</div>
       </div>
       <span class="back" onclick="resetConfig()">키 변경</span>
     </div>
@@ -287,7 +287,7 @@ function renderDraft(draft) {
       <h3>각자의 입장</h3><div>${escapeHtml(draft.eachPerspective || '')}</div>
       <h3>화해 제안</h3><ul>${recon}</ul>
     </div>
-    <div class="note-block"><strong>효니 참고용 메모</strong><br>${escapeHtml(draft.teacherNote || '')}</div>
+    <div class="note-block"><strong>교사 참고용 메모</strong><br>${escapeHtml(draft.teacherNote || '')}</div>
   `;
 }
 
