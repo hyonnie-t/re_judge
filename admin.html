@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>갈등 조정 도구 · 관리자</title>
+<style>
+  :root {
+    --bg: #FBF3EC;
+    --card: #FFFFFF;
+    --pink: #F0728C;
+    --pink-soft: #FDE4E9;
+    --ink: #3A2E2A;
+    --sub: #8A7A73;
+    --line: #EFE2D8;
+    --ok: #7CA982;
+    --warn: #E0A94B;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+    padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--sub); font-size: 13px; margin-bottom: 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 12px; }
+  label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; }
+  input, textarea, select {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    background: #FFFDFB;
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  button {
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--pink); color: #fff; }
+  .btn-secondary { background: var(--pink-soft); color: var(--pink); }
+  .btn-ghost { background: transparent; color: var(--sub); border: 1px solid var(--line); }
+  .btn-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .case-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 4px; border-bottom: 1px solid var(--line); cursor: pointer;
+  }
+  .case-item:last-child { border-bottom: none; }
+  .case-title { font-weight: 600; font-size: 14px; }
+  .case-meta { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .badge {
+    font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--pink-soft); color: var(--pink);
+    white-space: nowrap;
+  }
+  .badge.done { background: #E7F1E5; color: var(--ok); }
+  .draft-block { background: #FFF8F1; border-radius: 12px; padding: 14px; margin-top: 10px; font-size: 13px; line-height: 1.6; }
+  .draft-block h3 { font-size: 13px; margin: 10px 0 4px; color: var(--pink); }
+  .draft-block h3:first-child { margin-top: 0; }
+  .note-block { background: #FFF3E0; border-radius: 12px; padding: 12px; margin-top: 8px; font-size: 12px; color: #7A5A20; }
+  .hidden { display: none; }
+  .link-box { display: flex; gap: 8px; margin-top: 10px; }
+  .link-box input { flex: 1; background: #F7F2ED; font-size: 12px; }
+  .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .back { font-size: 13px; color: var(--sub); cursor: pointer; }
+  .loading { font-size: 13px; color: var(--sub); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="setupKey" class="card">
+    <h2>관리자 키 입력</h2>
+    <p class="sub" style="margin-top:-4px;">GAS 배포 시 설정한 ADMIN_KEY, GAS_URL을 입력해줘. (한 번 저장하면 이 브라우저에서 계속 유지돼)</p>
+    <label>GAS 배포 URL</label>
+    <input id="gasUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
+    <label>관리자 키</label>
+    <input id="adminKeyInput" type="password" placeholder="ADMIN_KEY">
+    <div class="btn-row"><button class="btn-primary" onclick="saveConfig()">저장하고 시작</button></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="top-nav">
+      <div>
+        <h1>학생 갈등 조정 도구</h1>
+        <div class="sub">효니 전용 · 학생에게는 승인된 결과만 전달돼</div>
+      </div>
+      <span class="back" onclick="resetConfig()">키 변경</span>
+    </div>
+
+    <!-- 목록 화면 -->
+    <div id="listView">
+      <div class="card">
+        <h2>새 사건 접수</h2>
+        <label>소속 그룹</label>
+        <input id="newGroup" value="학생회">
+        <label>학생 이름 (쉼표로 구분)</label>
+        <input id="newStudents" placeholder="예: 김서진, 이하늘">
+        <label>무슨 일이 있었나요</label>
+        <textarea id="newSummary" placeholder="사건 개요를 간단히 적어줘"></textarea>
+        <div class="btn-row"><button class="btn-primary" onclick="createCase()">접수하기</button></div>
+      </div>
+
+      <div class="card">
+        <h2>사건 목록</h2>
+        <div id="caseList" class="loading">불러오는 중...</div>
+      </div>
+    </div>
+
+    <!-- 상세 화면 -->
+    <div id="detailView" class="hidden">
+      <span class="back" onclick="showList()">← 목록으로</span>
+      <div class="card">
+        <h2 id="detailTitle">사건 상세</h2>
+        <div id="detailMeta" class="sub"></div>
+
+        <label>A 학생 진술</label>
+        <textarea id="statementA"></textarea>
+        <label>B 학생 진술</label>
+        <textarea id="statementB"></textarea>
+        <div class="btn-row">
+          <button class="btn-secondary" onclick="saveStatements()">진술 저장</button>
+          <button class="btn-primary" onclick="requestDraft()">AI 조정안 요청</button>
+        </div>
+
+        <div id="draftArea"></div>
+
+        <div id="approveArea" class="hidden">
+          <label>학생에게 전달할 최종 문구 (직접 수정 가능)</label>
+          <textarea id="finalText" style="min-height:140px;"></textarea>
+          <div class="btn-row">
+            <button class="btn-primary" onclick="approveCase()">검토 완료 · 승인</button>
+          </div>
+        </div>
+
+        <div id="linkArea" class="hidden">
+          <label>학생용 열람 링크 (로그인 없이 조회 가능, 승인된 내용만 보임)</label>
+          <div class="link-box">
+            <input id="publicLink" readonly>
+            <button class="btn-ghost" onclick="copyLink()">복사</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let GAS_URL = localStorage.getItem('mediator_gas_url') || '';
+let ADMIN_KEY = localStorage.getItem('mediator_admin_key') || '';
+let currentCaseId = null;
+
+function saveConfig() {
+  GAS_URL = document.getElementById('gasUrlInput').value.trim();
+  ADMIN_KEY = document.getElementById('adminKeyInput').value.trim();
+  if (!GAS_URL || !ADMIN_KEY) { alert('URL과 키를 모두 입력해줘'); return; }
+  localStorage.setItem('mediator_gas_url', GAS_URL);
+  localStorage.setItem('mediator_admin_key', ADMIN_KEY);
+  boot();
+}
+
+function resetConfig() {
+  localStorage.removeItem('mediator_gas_url');
+  localStorage.removeItem('mediator_admin_key');
+  location.reload();
+}
+
+async function api(action, payload) {
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    // GAS의 CORS preflight 문제를 피하기 위해 text/plain으로 보냄
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, adminKey: ADMIN_KEY, ...payload })
+  });
+  const data = await res.json();
+  if (data.error === 'unauthorized') {
+    alert('관리자 키가 맞지 않아. 다시 설정해줘.');
+    resetConfig();
+    throw new Error('unauthorized');
+  }
+  return data;
+}
+
+function boot() {
+  document.getElementById('setupKey').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  loadList();
+}
+
+async function loadList() {
+  const listEl = document.getElementById('caseList');
+  listEl.textContent = '불러오는 중...';
+  const data = await api('listCases', {});
+  if (!data.cases || data.cases.length === 0) {
+    listEl.innerHTML = '<div class="sub">등록된 사건이 없어.</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  data.cases.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'case-item';
+    div.onclick = () => openCase(c.caseId);
+    const badgeClass = c.status === '완료' ? 'badge done' : 'badge';
+    div.innerHTML = `
+      <div>
+        <div class="case-title">${escapeHtml(c.students || '(이름 미입력)')}</div>
+        <div class="case-meta">${escapeHtml(c.incidentSummary || '').slice(0, 40)}</div>
+      </div>
+      <span class="${badgeClass}">${c.status}</span>
+    `;
+    listEl.appendChild(div);
+  });
+}
+
+async function createCase() {
+  const group = document.getElementById('newGroup').value.trim();
+  const students = document.getElementById('newStudents').value.split(',').map(s => s.trim()).filter(Boolean);
+  const incidentSummary = document.getElementById('newSummary').value.trim();
+  if (students.length === 0 || !incidentSummary) { alert('학생 이름과 사건 개요는 입력해줘'); return; }
+  await api('createCase', { group, students, incidentSummary });
+  document.getElementById('newStudents').value = '';
+  document.getElementById('newSummary').value = '';
+  loadList();
+}
+
+function showList() {
+  document.getElementById('listView').classList.remove('hidden');
+  document.getElementById('detailView').classList.add('hidden');
+  loadList();
+}
+
+async function openCase(caseId) {
+  currentCaseId = caseId;
+  const data = await api('getCase', { caseId });
+  if (data.error) { alert('사건을 불러오지 못했어'); return; }
+
+  document.getElementById('listView').classList.add('hidden');
+  document.getElementById('detailView').classList.remove('hidden');
+
+  document.getElementById('detailTitle').textContent = data.students;
+  document.getElementById('detailMeta').textContent = `${data.group} · ${data.incidentSummary}`;
+  document.getElementById('statementA').value = data.statementA || '';
+  document.getElementById('statementB').value = data.statementB || '';
+
+  const draftArea = document.getElementById('draftArea');
+  const approveArea = document.getElementById('approveArea');
+  const linkArea = document.getElementById('linkArea');
+  draftArea.innerHTML = '';
+  approveArea.classList.add('hidden');
+  linkArea.classList.add('hidden');
+
+  if (data.aiDraft && !data.aiDraft.error) {
+    renderDraft(data.aiDraft);
+    approveArea.classList.remove('hidden');
+    document.getElementById('finalText').value = data.teacherFinalText ||
+      (Array.isArray(data.aiDraft.reconciliation) ? data.aiDraft.reconciliation.join('\n') : '');
+  }
+  if (data.status === '완료' && data.publicViewId) {
+    showLink(data.publicViewId);
+  }
+}
+
+function renderDraft(draft) {
+  const draftArea = document.getElementById('draftArea');
+  const recon = Array.isArray(draft.reconciliation) ? draft.reconciliation.map(r => `<li>${escapeHtml(r)}</li>`).join('') : '';
+  draftArea.innerHTML = `
+    <div class="draft-block">
+      <h3>쟁점</h3><div>${escapeHtml(draft.issues || '')}</div>
+      <h3>공통 확인 사실</h3><div>${escapeHtml(draft.facts || '')}</div>
+      <h3>각자의 입장</h3><div>${escapeHtml(draft.eachPerspective || '')}</div>
+      <h3>화해 제안</h3><ul>${recon}</ul>
+    </div>
+    <div class="note-block"><strong>효니 참고용 메모</strong><br>${escapeHtml(draft.teacherNote || '')}</div>
+  `;
+}
+
+async function saveStatements() {
+  const statementA = document.getElementById('statementA').value.trim();
+  const statementB = document.getElementById('statementB').value.trim();
+  await api('updateStatements', { caseId: currentCaseId, statementA, statementB });
+  alert('진술 저장했어');
+}
+
+async function requestDraft() {
+  await saveStatements();
+  const draftArea = document.getElementById('draftArea');
+  draftArea.innerHTML = '<div class="loading">AI가 조정안을 만드는 중...</div>';
+  const data = await api('generateDraft', { caseId: currentCaseId });
+  if (data.draft && data.draft.error) {
+    draftArea.innerHTML = `<div class="note-block">생성 실패: ${escapeHtml(JSON.stringify(data.draft))}</div>`;
+    return;
+  }
+  renderDraft(data.draft);
+  document.getElementById('approveArea').classList.remove('hidden');
+  document.getElementById('finalText').value = Array.isArray(data.draft.reconciliation)
+    ? data.draft.reconciliation.join('\n') : '';
+}
+
+async function approveCase() {
+  const teacherFinalText = document.getElementById('finalText').value.trim();
+  if (!teacherFinalText) { alert('학생에게 전달할 문구를 입력해줘'); return; }
+  const data = await api('approveCase', { caseId: currentCaseId, teacherFinalText });
+  if (data.token) {
+    showLink(data.token);
+    loadList();
+  }
+}
+
+function showLink(token) {
+  const url = `${location.origin}${location.pathname.replace('admin.html', '')}student.html?token=${token}`;
+  document.getElementById('linkArea').classList.remove('hidden');
+  document.getElementById('publicLink').value = url;
+}
+
+function copyLink() {
+  const input = document.getElementById('publicLink');
+  input.select();
+  document.execCommand('copy');
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+if (GAS_URL && ADMIN_KEY) boot();
+</script>
+</body>
+</html>
