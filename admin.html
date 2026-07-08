@@ -324,7 +324,7 @@ async function approveCase() {
 }
 
 function showLink(token) {
-  const url = `${location.origin}${location.pathname.replace('admin.html', '')}student.html?token=${token}`;
+  const url = `${GAS_URL}?token=${token}`;
   document.getElementById('linkArea').classList.remove('hidden');
   document.getElementById('publicLink').value = url;
 }
