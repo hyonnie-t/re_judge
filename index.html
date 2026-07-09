@@ -206,12 +206,15 @@
           <div id="sevReason" class="sev-reason"></div>
         </div>
 
-        <div id="draftArea"></div>
-        <div id="verdictArea"></div>
+        <div id="memoArea"></div>
 
         <div id="approveArea" class="hidden">
-          <label>학생에게 전달할 최종 문구 (직접 수정 가능 · 심각도를 바꾸면 자동으로 다시 채워져)</label>
+          <label>학생에게 전달할 판결문 · 상담기록 (직접 수정 가능 · 심각도를 바꾸면 다시 채워져)</label>
           <textarea id="finalText" style="min-height:220px;"></textarea>
+          <div class="btn-row">
+            <button class="btn-ghost btn-sm" id="previewBtn" onclick="togglePreview()">🧑‍🎓 학생 화면 미리보기</button>
+          </div>
+          <div id="verdictArea" class="hidden"></div>
           <div class="btn-row">
             <button class="btn-primary" onclick="approveCase()">검토 완료 · 승인</button>
           </div>
@@ -422,8 +425,9 @@ async function openCase(caseId) {
 
   // reset draft areas
   currentDraft = null;
-  document.getElementById('draftArea').innerHTML = '';
+  document.getElementById('memoArea').innerHTML = '';
   document.getElementById('verdictArea').innerHTML = '';
+  document.getElementById('verdictArea').classList.add('hidden');
   document.getElementById('severityArea').classList.add('hidden');
   document.getElementById('approveArea').classList.add('hidden');
   document.getElementById('linkArea').classList.add('hidden');
@@ -447,14 +451,15 @@ async function saveStatements() {
 
 async function requestDraft() {
   await saveStatements();
-  const draftArea = document.getElementById('draftArea');
+  const memoArea = document.getElementById('memoArea');
   document.getElementById('verdictArea').innerHTML = '';
+  document.getElementById('verdictArea').classList.add('hidden');
   document.getElementById('severityArea').classList.add('hidden');
   document.getElementById('approveArea').classList.add('hidden');
-  draftArea.innerHTML = '<div class="loading">AI가 조정안을 만드는 중...</div>';
+  memoArea.innerHTML = '<div class="loading">AI가 조정안을 만드는 중...</div>';
   const data = await api('generateDraft', { caseId: currentCaseId });
   if (!data.draft || data.draft.error) {
-    draftArea.innerHTML = `<div class="note-block">생성 실패: ${escapeHtml(JSON.stringify(data.draft || {}))}</div>`;
+    memoArea.innerHTML = `<div class="note-block">생성 실패: ${escapeHtml(JSON.stringify(data.draft || {}))}</div>`;
     return;
   }
   currentDraft = data.draft;
@@ -463,7 +468,8 @@ async function requestDraft() {
   showDraft(null);
 }
 
-// Render the AI draft, the severity control, and the verdict preview.
+// Render severity caption, the private teacher memo, and the editable final text.
+// The styled student-facing verdict is a preview, hidden until toggled.
 function showDraft(existingFinalText) {
   document.getElementById('sevSelect').value = currentSeverity;
   updateSevBadge();
@@ -471,14 +477,42 @@ function showDraft(existingFinalText) {
     currentDraft.severityReason ? ('AI 판단 근거: ' + currentDraft.severityReason) : '';
   document.getElementById('severityArea').classList.remove('hidden');
 
-  renderRawDraft(currentDraft);
-  renderVerdict();
+  renderTeacherNote(currentDraft);
+
+  // student-facing verdict is a preview: keep it hidden until asked
+  const va = document.getElementById('verdictArea');
+  va.classList.add('hidden');
+  va.innerHTML = '';
+  setPreviewBtnLabel(false);
 
   const ft = document.getElementById('finalText');
   ft.value = (existingFinalText && existingFinalText.trim()) ? existingFinalText : buildVerdictText(currentDraft, currentSeverity);
   finalTextDirty = !!(existingFinalText && existingFinalText.trim());
   ft.oninput = () => { finalTextDirty = true; };
   document.getElementById('approveArea').classList.remove('hidden');
+}
+
+// Teacher-only memo (never shown to students). Distinct role from the verdict:
+// only out-of-band info (discrepancies, extra checks, rule review). Empty -> "특이사항 없음".
+function renderTeacherNote(draft) {
+  const note = (draft.teacherNote || '').trim();
+  const el = document.getElementById('memoArea');
+  const head = `<strong>🔒 교사 전용 메모</strong> <span class="sub" style="font-size:11px;">· 학생에게 안 나감 (불일치·추가확인·규정검토)</span><br>`;
+  const bodyText = note ? escapeHtml(note) : '<span class="sub">특이사항 없음</span>';
+  el.innerHTML = `<div class="note-block">${head}${bodyText}</div>`;
+}
+
+function setPreviewBtnLabel(shown) {
+  const b = document.getElementById('previewBtn');
+  if (b) b.textContent = shown ? '🧑‍🎓 미리보기 숨기기' : '🧑‍🎓 학생 화면 미리보기';
+}
+
+function togglePreview() {
+  const area = document.getElementById('verdictArea');
+  const willShow = area.classList.contains('hidden');
+  if (willShow) { renderVerdict(); area.classList.remove('hidden'); }
+  else { area.classList.add('hidden'); }
+  setPreviewBtnLabel(willShow);
 }
 
 function updateSevBadge() {
@@ -492,30 +526,13 @@ async function onSeverityChange() {
   updateSevBadge();
   // persist the override separately from the AI value
   await api('updateSeverity', { caseId: currentCaseId, severityOverride: currentSeverity });
-  renderVerdict();
+  // only re-render the preview if it is currently open
+  const area = document.getElementById('verdictArea');
+  if (!area.classList.contains('hidden')) renderVerdict();
   // re-fill final text with the new tone unless the teacher already edited it
   if (!finalTextDirty) {
     document.getElementById('finalText').value = buildVerdictText(currentDraft, currentSeverity);
   }
-}
-
-// Structured AI draft (internal reference for the teacher).
-function renderRawDraft(draft) {
-  const perspectives = (draft.perspectives || [])
-    .map(p => `<div><strong>${escapeHtml(p.name)}</strong>: ${escapeHtml(p.view)}</div>`).join('');
-  const common = (draft.reconciliationCommon || []).map(r => `<li>${escapeHtml(r)}</li>`).join('');
-  const indiv = (draft.reconciliationIndividual || [])
-    .map(r => `<li><strong>${escapeHtml(r.name)}</strong>: ${escapeHtml(r.action)}</li>`).join('');
-  document.getElementById('draftArea').innerHTML = `
-    <div class="draft-block">
-      <h3>쟁점</h3><div>${escapeHtml(draft.issues || '')}</div>
-      <h3>공통 확인 사실</h3><div>${escapeHtml(draft.facts || '')}</div>
-      <h3>각자의 입장</h3><div>${perspectives}</div>
-      <h3>공통 처방</h3><ul>${common}</ul>
-      <h3>개인별 처방</h3><ul>${indiv}</ul>
-    </div>
-    <div class="note-block"><strong>교사 참고용 메모</strong><br>${escapeHtml(draft.teacherNote || '')}</div>
-  `;
 }
 
 // Verdict preview: judge style (light/normal) vs plain counsel style (heavy).
