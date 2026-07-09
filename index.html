@@ -15,6 +15,8 @@
     --line: #EFE2D8;
     --ok: #7CA982;
     --warn: #E0A94B;
+    --heavy: #8A7A73;
+    --heavy-soft: #EFE7E1;
   }
   * { box-sizing: border-box; }
   body {
@@ -35,6 +37,8 @@
     margin-bottom: 14px;
   }
   .card h2 { font-size: 15px; margin: 0 0 12px; }
+  .section-head { display:flex; justify-content:space-between; align-items:center; margin: 18px 0 6px; }
+  .section-head .t { font-size: 13px; color: var(--sub); font-weight:600; }
   label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; }
   input, textarea, select {
     width: 100%;
@@ -45,7 +49,7 @@
     font-family: inherit;
     background: #FFFDFB;
   }
-  textarea { min-height: 80px; resize: vertical; }
+  textarea { min-height: 70px; resize: vertical; }
   button {
     border: none;
     border-radius: 10px;
@@ -57,6 +61,7 @@
   .btn-primary { background: var(--pink); color: #fff; }
   .btn-secondary { background: var(--pink-soft); color: var(--pink); }
   .btn-ghost { background: transparent; color: var(--sub); border: 1px solid var(--line); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
   .btn-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
   .case-item {
     display: flex; justify-content: space-between; align-items: center;
@@ -70,6 +75,21 @@
     white-space: nowrap;
   }
   .badge.done { background: #E7F1E5; color: var(--ok); }
+  .chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; margin-right:6px; }
+  .chip.light { background:#E7F1E5; color:#5E8A66; }
+  .chip.normal { background:#FDECD3; color:#B67C25; }
+  .chip.heavy { background:var(--heavy-soft); color:var(--heavy); }
+
+  /* dynamic party / witness rows */
+  .entry {
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 8px; background:#FFFDFB;
+  }
+  .entry .row-top { display:flex; gap:8px; align-items:center; }
+  .entry .row-top input { flex:1; }
+  .entry textarea { margin-top: 6px; }
+  .entry .x { flex:0 0 auto; }
+
+  /* draft blocks */
   .draft-block { background: #FFF8F1; border-radius: 12px; padding: 14px; margin-top: 10px; font-size: 13px; line-height: 1.6; }
   .draft-block h3 { font-size: 13px; margin: 10px 0 4px; color: var(--pink); }
   .draft-block h3:first-child { margin-top: 0; }
@@ -80,6 +100,28 @@
   .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .back { font-size: 13px; color: var(--sub); cursor: pointer; }
   .loading { font-size: 13px; color: var(--sub); }
+
+  /* severity control */
+  .sev-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .sev-badge { font-size:12px; font-weight:700; padding:4px 12px; border-radius:999px; }
+  .sev-badge.light { background:#E7F1E5; color:#5E8A66; }
+  .sev-badge.normal { background:#FDECD3; color:#B67C25; }
+  .sev-badge.heavy { background:var(--heavy-soft); color:var(--heavy); }
+  .sev-bar select { width:auto; padding:6px 10px; font-size:13px; }
+  .sev-reason { font-size:12px; color:var(--sub); margin-top:4px; }
+
+  /* verdict preview */
+  .verdict { border-radius:14px; padding:18px; margin-top:12px; font-size:13px; line-height:1.7; }
+  .verdict.judge { background:#FFF6F8; border:1px solid var(--pink-soft); }
+  .verdict.counsel { background:#F6F3F0; border:1px solid var(--heavy-soft); }
+  .verdict .v-head { font-weight:700; font-size:14px; margin-bottom:6px; }
+  .verdict .v-meta { font-size:12px; color:var(--sub); margin-bottom:10px; }
+  .verdict h4 { font-size:12px; margin:12px 0 4px; letter-spacing:.3px; }
+  .verdict.judge h4 { color:var(--pink); }
+  .verdict.counsel h4 { color:var(--heavy); }
+  .verdict ul { margin:4px 0; padding-left:18px; }
+  .verdict .comment { margin-top:12px; font-style:italic; }
+  .verdict.counsel .comment { font-style:normal; }
 </style>
 </head>
 <body>
@@ -110,7 +152,7 @@
         <h2>새 사건 접수</h2>
         <label>소속 그룹</label>
         <input id="newGroup" value="학생회">
-        <label>학생 이름 (쉼표로 구분)</label>
+        <label>당사자 이름 (쉼표로 구분, 2명 이상)</label>
         <input id="newStudents" placeholder="예: 김서진, 이하늘">
         <label>무슨 일이 있었나요</label>
         <textarea id="newSummary" placeholder="사건 개요를 간단히 적어줘"></textarea>
@@ -130,20 +172,46 @@
         <h2 id="detailTitle">사건 상세</h2>
         <div id="detailMeta" class="sub"></div>
 
-        <label>A 학생 진술</label>
-        <textarea id="statementA"></textarea>
-        <label>B 학생 진술</label>
-        <textarea id="statementB"></textarea>
+        <!-- 당사자 진술 (동적) -->
+        <div class="section-head">
+          <span class="t">당사자 진술 (2명 이상)</span>
+          <button class="btn-ghost btn-sm" onclick="addParty()">+ 당사자 추가</button>
+        </div>
+        <div id="partiesContainer"></div>
+
+        <!-- 증언 (선택) -->
+        <div class="section-head">
+          <span class="t">증언 · 선택 (참고 정보)</span>
+          <button class="btn-ghost btn-sm" onclick="addWitness()">+ 증언 추가</button>
+        </div>
+        <div id="witnessesContainer"></div>
+        <div id="witnessEmpty" class="sub" style="margin-top:6px;">증언은 없어도 진행할 수 있어. 당사자 진술과 같은 무게로 다뤄지지 않아.</div>
+
         <div class="btn-row">
           <button class="btn-secondary" onclick="saveStatements()">진술 저장</button>
           <button class="btn-primary" onclick="requestDraft()">AI 조정안 요청</button>
         </div>
 
+        <!-- 심각도 컨트롤 -->
+        <div id="severityArea" class="hidden">
+          <div class="sev-bar">
+            <span id="sevBadge" class="sev-badge">심각도</span>
+            <select id="sevSelect" onchange="onSeverityChange()">
+              <option value="가벼움">가벼움</option>
+              <option value="보통">보통</option>
+              <option value="무거움">무거움</option>
+            </select>
+            <span class="sub" style="font-size:12px;">← AI 판단을 직접 바꿀 수 있어</span>
+          </div>
+          <div id="sevReason" class="sev-reason"></div>
+        </div>
+
         <div id="draftArea"></div>
+        <div id="verdictArea"></div>
 
         <div id="approveArea" class="hidden">
-          <label>학생에게 전달할 최종 문구 (직접 수정 가능)</label>
-          <textarea id="finalText" style="min-height:140px;"></textarea>
+          <label>학생에게 전달할 최종 문구 (직접 수정 가능 · 심각도를 바꾸면 자동으로 다시 채워져)</label>
+          <textarea id="finalText" style="min-height:220px;"></textarea>
           <div class="btn-row">
             <button class="btn-primary" onclick="approveCase()">검토 완료 · 승인</button>
           </div>
@@ -166,6 +234,12 @@
 let GAS_URL = localStorage.getItem('mediator_gas_url') || '';
 let ADMIN_KEY = localStorage.getItem('mediator_admin_key') || '';
 let currentCaseId = null;
+let currentDraft = null;
+let currentMeta = { caseNumber: '', group: '' };
+let currentSeverity = '보통';
+let finalTextDirty = false; // becomes true if the teacher edits finalText manually
+
+const SEV_CLASS = { '가벼움': 'light', '보통': 'normal', '무거움': 'heavy' };
 
 function saveConfig() {
   GAS_URL = document.getElementById('gasUrlInput').value.trim();
@@ -185,7 +259,7 @@ function resetConfig() {
 async function api(action, payload) {
   const res = await fetch(GAS_URL, {
     method: 'POST',
-    // GAS의 CORS preflight 문제를 피하기 위해 text/plain으로 보냄
+    // text/plain avoids the GAS CORS preflight problem
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action, adminKey: ADMIN_KEY, ...payload })
   });
@@ -218,10 +292,13 @@ async function loadList() {
     div.className = 'case-item';
     div.onclick = () => openCase(c.caseId);
     const badgeClass = c.status === '완료' ? 'badge done' : 'badge';
+    const sevChip = c.severity
+      ? `<span class="chip ${SEV_CLASS[c.severity] || 'normal'}">${escapeHtml(c.severity)}</span>`
+      : '';
     div.innerHTML = `
       <div>
         <div class="case-title">${escapeHtml(c.students || '(이름 미입력)')}</div>
-        <div class="case-meta">${escapeHtml(c.incidentSummary || '').slice(0, 40)}</div>
+        <div class="case-meta">${sevChip}${escapeHtml(c.incidentSummary || '').slice(0, 36)}</div>
       </div>
       <span class="${badgeClass}">${c.status}</span>
     `;
@@ -233,7 +310,7 @@ async function createCase() {
   const group = document.getElementById('newGroup').value.trim();
   const students = document.getElementById('newStudents').value.split(',').map(s => s.trim()).filter(Boolean);
   const incidentSummary = document.getElementById('newSummary').value.trim();
-  if (students.length === 0 || !incidentSummary) { alert('학생 이름과 사건 개요는 입력해줘'); return; }
+  if (students.length < 2 || !incidentSummary) { alert('당사자 이름은 2명 이상, 사건 개요도 입력해줘'); return; }
   await api('createCase', { group, students, incidentSummary });
   document.getElementById('newStudents').value = '';
   document.getElementById('newSummary').value = '';
@@ -246,77 +323,318 @@ function showList() {
   loadList();
 }
 
+// ===== dynamic party / witness rows =====
+
+function partyRowHtml(name, statement) {
+  return `
+    <div class="entry" data-kind="party">
+      <div class="row-top">
+        <input class="p-name" placeholder="이름" value="${escapeAttr(name)}">
+        <button class="btn-ghost btn-sm x" onclick="removeEntry(this)">삭제</button>
+      </div>
+      <textarea class="p-stmt" placeholder="이 학생의 진술">${escapeHtml(statement)}</textarea>
+    </div>`;
+}
+
+function witnessRowHtml(name, statement) {
+  return `
+    <div class="entry" data-kind="witness">
+      <div class="row-top">
+        <input class="w-name" placeholder="증인 이름 (선택)" value="${escapeAttr(name)}">
+        <button class="btn-ghost btn-sm x" onclick="removeEntry(this)">삭제</button>
+      </div>
+      <textarea class="w-stmt" placeholder="본 것 / 들은 것">${escapeHtml(statement)}</textarea>
+    </div>`;
+}
+
+function addParty(name, statement) {
+  const c = document.getElementById('partiesContainer');
+  c.insertAdjacentHTML('beforeend', partyRowHtml(name || '', statement || ''));
+}
+
+function addWitness(name, statement) {
+  const c = document.getElementById('witnessesContainer');
+  c.insertAdjacentHTML('beforeend', witnessRowHtml(name || '', statement || ''));
+  refreshWitnessEmpty();
+}
+
+function removeEntry(btn) {
+  const entry = btn.closest('.entry');
+  const kind = entry.getAttribute('data-kind');
+  if (kind === 'party') {
+    const count = document.querySelectorAll('#partiesContainer .entry').length;
+    if (count <= 2) { alert('당사자는 최소 2명이어야 해'); return; }
+  }
+  entry.remove();
+  refreshWitnessEmpty();
+}
+
+function refreshWitnessEmpty() {
+  const has = document.querySelectorAll('#witnessesContainer .entry').length > 0;
+  document.getElementById('witnessEmpty').classList.toggle('hidden', has);
+}
+
+function collectParties() {
+  return Array.from(document.querySelectorAll('#partiesContainer .entry')).map((el, i) => ({
+    id: 'p' + (i + 1),
+    name: el.querySelector('.p-name').value.trim(),
+    statement: el.querySelector('.p-stmt').value.trim()
+  }));
+}
+
+function collectWitnesses() {
+  return Array.from(document.querySelectorAll('#witnessesContainer .entry'))
+    .map(el => ({
+      name: el.querySelector('.w-name').value.trim(),
+      statement: el.querySelector('.w-stmt').value.trim()
+    }))
+    .filter(w => w.name || w.statement);
+}
+
+// ===== case detail =====
+
 async function openCase(caseId) {
   currentCaseId = caseId;
+  finalTextDirty = false;
   const data = await api('getCase', { caseId });
   if (data.error) { alert('사건을 불러오지 못했어'); return; }
+
+  currentMeta = { caseNumber: data.caseNumber || '', group: data.group || '' };
 
   document.getElementById('listView').classList.add('hidden');
   document.getElementById('detailView').classList.remove('hidden');
 
-  document.getElementById('detailTitle').textContent = data.students;
-  document.getElementById('detailMeta').textContent = `${data.group} · ${data.incidentSummary}`;
-  document.getElementById('statementA').value = data.statementA || '';
-  document.getElementById('statementB').value = data.statementB || '';
+  document.getElementById('detailTitle').textContent = data.students || '사건 상세';
+  const metaBits = [data.group, data.caseNumber, data.incidentSummary].filter(Boolean).join(' · ');
+  document.getElementById('detailMeta').textContent = metaBits;
 
-  const draftArea = document.getElementById('draftArea');
-  const approveArea = document.getElementById('approveArea');
-  const linkArea = document.getElementById('linkArea');
-  draftArea.innerHTML = '';
-  approveArea.classList.add('hidden');
-  linkArea.classList.add('hidden');
+  // parties
+  const pc = document.getElementById('partiesContainer');
+  pc.innerHTML = '';
+  const parties = (data.parties && data.parties.length) ? data.parties : [{ name: '', statement: '' }, { name: '', statement: '' }];
+  parties.forEach(p => addParty(p.name, p.statement));
+
+  // witnesses
+  const wc = document.getElementById('witnessesContainer');
+  wc.innerHTML = '';
+  (data.witnesses || []).forEach(w => addWitness(w.name, w.statement));
+  refreshWitnessEmpty();
+
+  // reset draft areas
+  currentDraft = null;
+  document.getElementById('draftArea').innerHTML = '';
+  document.getElementById('verdictArea').innerHTML = '';
+  document.getElementById('severityArea').classList.add('hidden');
+  document.getElementById('approveArea').classList.add('hidden');
+  document.getElementById('linkArea').classList.add('hidden');
 
   if (data.aiDraft && !data.aiDraft.error) {
-    renderDraft(data.aiDraft);
-    approveArea.classList.remove('hidden');
-    document.getElementById('finalText').value = data.teacherFinalText ||
-      (Array.isArray(data.aiDraft.reconciliation) ? data.aiDraft.reconciliation.join('\n') : '');
+    currentDraft = data.aiDraft;
+    currentSeverity = data.finalSeverity || data.aiDraft.severity || '보통';
+    showDraft(data.teacherFinalText);
   }
   if (data.status === '완료' && data.publicViewId) {
     showLink(data.publicViewId);
   }
 }
 
-function renderDraft(draft) {
-  const draftArea = document.getElementById('draftArea');
-  const recon = Array.isArray(draft.reconciliation) ? draft.reconciliation.map(r => `<li>${escapeHtml(r)}</li>`).join('') : '';
-  draftArea.innerHTML = `
-    <div class="draft-block">
-      <h3>쟁점</h3><div>${escapeHtml(draft.issues || '')}</div>
-      <h3>공통 확인 사실</h3><div>${escapeHtml(draft.facts || '')}</div>
-      <h3>각자의 입장</h3><div>${escapeHtml(draft.eachPerspective || '')}</div>
-      <h3>화해 제안</h3><ul>${recon}</ul>
-    </div>
-    <div class="note-block"><strong>교사 참고용 메모</strong><br>${escapeHtml(draft.teacherNote || '')}</div>
-  `;
-}
-
 async function saveStatements() {
-  const statementA = document.getElementById('statementA').value.trim();
-  const statementB = document.getElementById('statementB').value.trim();
-  await api('updateStatements', { caseId: currentCaseId, statementA, statementB });
+  const parties = collectParties();
+  if (parties.filter(p => p.name || p.statement).length < 2) { alert('당사자 진술을 2명 이상 채워줘'); return; }
+  await api('updateStatements', { caseId: currentCaseId, parties, witnesses: collectWitnesses() });
   alert('진술 저장했어');
 }
 
 async function requestDraft() {
   await saveStatements();
   const draftArea = document.getElementById('draftArea');
+  document.getElementById('verdictArea').innerHTML = '';
+  document.getElementById('severityArea').classList.add('hidden');
+  document.getElementById('approveArea').classList.add('hidden');
   draftArea.innerHTML = '<div class="loading">AI가 조정안을 만드는 중...</div>';
   const data = await api('generateDraft', { caseId: currentCaseId });
-  if (data.draft && data.draft.error) {
-    draftArea.innerHTML = `<div class="note-block">생성 실패: ${escapeHtml(JSON.stringify(data.draft))}</div>`;
+  if (!data.draft || data.draft.error) {
+    draftArea.innerHTML = `<div class="note-block">생성 실패: ${escapeHtml(JSON.stringify(data.draft || {}))}</div>`;
     return;
   }
-  renderDraft(data.draft);
+  currentDraft = data.draft;
+  currentSeverity = data.draft.severity || '보통';
+  finalTextDirty = false;
+  showDraft(null);
+}
+
+// Render the AI draft, the severity control, and the verdict preview.
+function showDraft(existingFinalText) {
+  document.getElementById('sevSelect').value = currentSeverity;
+  updateSevBadge();
+  document.getElementById('sevReason').textContent =
+    currentDraft.severityReason ? ('AI 판단 근거: ' + currentDraft.severityReason) : '';
+  document.getElementById('severityArea').classList.remove('hidden');
+
+  renderRawDraft(currentDraft);
+  renderVerdict();
+
+  const ft = document.getElementById('finalText');
+  ft.value = (existingFinalText && existingFinalText.trim()) ? existingFinalText : buildVerdictText(currentDraft, currentSeverity);
+  finalTextDirty = !!(existingFinalText && existingFinalText.trim());
+  ft.oninput = () => { finalTextDirty = true; };
   document.getElementById('approveArea').classList.remove('hidden');
-  document.getElementById('finalText').value = Array.isArray(data.draft.reconciliation)
-    ? data.draft.reconciliation.join('\n') : '';
+}
+
+function updateSevBadge() {
+  const badge = document.getElementById('sevBadge');
+  badge.textContent = '심각도: ' + currentSeverity;
+  badge.className = 'sev-badge ' + (SEV_CLASS[currentSeverity] || 'normal');
+}
+
+async function onSeverityChange() {
+  currentSeverity = document.getElementById('sevSelect').value;
+  updateSevBadge();
+  // persist the override separately from the AI value
+  await api('updateSeverity', { caseId: currentCaseId, severityOverride: currentSeverity });
+  renderVerdict();
+  // re-fill final text with the new tone unless the teacher already edited it
+  if (!finalTextDirty) {
+    document.getElementById('finalText').value = buildVerdictText(currentDraft, currentSeverity);
+  }
+}
+
+// Structured AI draft (internal reference for the teacher).
+function renderRawDraft(draft) {
+  const perspectives = (draft.perspectives || [])
+    .map(p => `<div><strong>${escapeHtml(p.name)}</strong>: ${escapeHtml(p.view)}</div>`).join('');
+  const common = (draft.reconciliationCommon || []).map(r => `<li>${escapeHtml(r)}</li>`).join('');
+  const indiv = (draft.reconciliationIndividual || [])
+    .map(r => `<li><strong>${escapeHtml(r.name)}</strong>: ${escapeHtml(r.action)}</li>`).join('');
+  document.getElementById('draftArea').innerHTML = `
+    <div class="draft-block">
+      <h3>쟁점</h3><div>${escapeHtml(draft.issues || '')}</div>
+      <h3>공통 확인 사실</h3><div>${escapeHtml(draft.facts || '')}</div>
+      <h3>각자의 입장</h3><div>${perspectives}</div>
+      <h3>공통 처방</h3><ul>${common}</ul>
+      <h3>개인별 처방</h3><ul>${indiv}</ul>
+    </div>
+    <div class="note-block"><strong>교사 참고용 메모</strong><br>${escapeHtml(draft.teacherNote || '')}</div>
+  `;
+}
+
+// Verdict preview: judge style (light/normal) vs plain counsel style (heavy).
+function renderVerdict() {
+  const draft = currentDraft;
+  const sev = currentSeverity;
+  const area = document.getElementById('verdictArea');
+  const esc = escapeHtml;
+  const caseNo = currentMeta.caseNumber || '';
+
+  const perspectives = (draft.perspectives || [])
+    .map(p => `<li><strong>${esc(p.name)}</strong>: ${esc(p.view)}</li>`).join('');
+
+  if (sev === '무거움') {
+    const measures = []
+      .concat((draft.reconciliationCommon || []).map(r => `<li>${esc(r)}</li>`))
+      .concat((draft.reconciliationIndividual || []).map(r => `<li><strong>${esc(r.name)}</strong>: ${esc(r.action)}</li>`))
+      .join('');
+    area.innerHTML = `
+      <div class="verdict counsel">
+        <div class="v-head">📋 상담 기록</div>
+        <div class="v-meta">${esc(caseNo)}</div>
+        <h4>쟁점</h4><div>${esc(draft.issues || '')}</div>
+        <h4>사실관계</h4><div>${esc(draft.facts || '')}</div>
+        <h4>각자의 입장</h4><ul>${perspectives}</ul>
+        <h4>권장 조치</h4><ul>${measures}</ul>
+        <h4>교사 확인 필요 사유</h4><div>${esc(draft.teacherNote || '')}</div>
+      </div>`;
+    return;
+  }
+
+  const common = (draft.reconciliationCommon || []).map(r => `<li>${esc(r)}</li>`).join('');
+  const indiv = (draft.reconciliationIndividual || [])
+    .map(r => `<li><strong>${esc(r.name)}</strong>: ${esc(r.action)}</li>`).join('');
+  area.innerHTML = `
+    <div class="verdict judge">
+      <div class="v-head">📜 대영중 갈등조정소 판결문</div>
+      <div class="v-meta">사건번호: ${esc(caseNo)}<br>사건명: "${esc(draft.caseName || '')}"</div>
+      <h4>주문</h4>
+      <div>당사자들은 서로의 입장을 이해하고, 아래 화해 처방전을 성실히 이행하여 관계를 회복할 것을 명한다.</div>
+      <h4>이유 — 1. 쟁점</h4><div>${esc(draft.issues || '')}</div>
+      <h4>이유 — 2. 인정되는 사실</h4><div>${esc(draft.facts || '')}</div>
+      <h4>이유 — 3. 각자의 입장</h4><ul>${perspectives}</ul>
+      <h4>화해 처방전 — 공통</h4><ul>${common}</ul>
+      <h4>화해 처방전 — 개인별</h4><ul>${indiv}</ul>
+      <div class="comment">👩‍⚖️ 판사의 한마디 — ${esc(draft.judgeComment || '')}</div>
+    </div>`;
+}
+
+// Plain-text version that becomes the student-facing final text.
+function buildVerdictText(draft, sev) {
+  const caseNo = currentMeta.caseNumber || '';
+  const persp = (draft.perspectives || []).map(p => `- ${p.name}: ${p.view}`).join('\n');
+
+  if (sev === '무거움') {
+    const measures = []
+      .concat((draft.reconciliationCommon || []).map(r => `- ${r}`))
+      .concat((draft.reconciliationIndividual || []).map(r => `- ${r.name}: ${r.action}`))
+      .join('\n');
+    return [
+      '📋 상담 기록',
+      '사건번호: ' + caseNo,
+      '',
+      '■ 쟁점',
+      draft.issues || '',
+      '',
+      '■ 사실관계',
+      draft.facts || '',
+      '',
+      '■ 각자의 입장',
+      persp,
+      '',
+      '■ 권장 조치',
+      measures,
+      '',
+      '※ 이 사안은 담임·학년부와 함께 별도로 확인이 필요해. 자세한 내용은 선생님과 직접 이야기하자.'
+    ].join('\n');
+  }
+
+  const common = (draft.reconciliationCommon || []).map(r => `- ${r}`).join('\n');
+  const indiv = (draft.reconciliationIndividual || []).map(r => `- ${r.name}: ${r.action}`).join('\n');
+  return [
+    '📜 대영중 갈등조정소 판결문',
+    '사건번호: ' + caseNo,
+    '사건명: "' + (draft.caseName || '') + '"',
+    '',
+    '【주문】',
+    '당사자들은 서로의 입장을 이해하고, 아래 화해 처방전을 성실히 이행하여 관계를 회복할 것을 명한다.',
+    '',
+    '【이유】',
+    '1. 쟁점',
+    draft.issues || '',
+    '',
+    '2. 인정되는 사실',
+    draft.facts || '',
+    '',
+    '3. 각자의 입장',
+    persp,
+    '',
+    '【화해 처방전】',
+    '· 공통 처방',
+    common,
+    '',
+    '· 개인별 처방',
+    indiv,
+    '',
+    '【판사의 한마디】',
+    draft.judgeComment || ''
+  ].join('\n');
 }
 
 async function approveCase() {
   const teacherFinalText = document.getElementById('finalText').value.trim();
   if (!teacherFinalText) { alert('학생에게 전달할 문구를 입력해줘'); return; }
-  const data = await api('approveCase', { caseId: currentCaseId, teacherFinalText });
+  const data = await api('approveCase', {
+    caseId: currentCaseId,
+    teacherFinalText,
+    severityOverride: currentSeverity
+  });
   if (data.token) {
     showLink(data.token);
     loadList();
@@ -338,6 +656,7 @@ function copyLink() {
 function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
+function escapeAttr(str) { return escapeHtml(str); }
 
 if (GAS_URL && ADMIN_KEY) boot();
 </script>
