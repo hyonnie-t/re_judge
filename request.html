@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>갈등 조정 도구 · 사용 신청</title>
+<style>
+  :root {
+    --bg: #FBF3EC;
+    --card: #FFFFFF;
+    --pink: #F0728C;
+    --pink-soft: #FDE4E9;
+    --ink: #3A2E2A;
+    --sub: #8A7A73;
+    --line: #EFE2D8;
+    --ok: #7CA982;
+    --err: #D9534F;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+    padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 520px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--sub); font-size: 13px; margin-bottom: 20px; line-height:1.7; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 14px;
+  }
+  label { display: block; font-size: 13px; color: var(--sub); margin: 14px 0 4px; }
+  label:first-of-type { margin-top: 0; }
+  label .req { color: var(--pink); }
+  input, textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    background: #FFFDFB;
+  }
+  input.ok { border-color: var(--ok); }
+  input.bad { border-color: var(--err); }
+  textarea { min-height: 70px; resize: vertical; }
+  button {
+    border: none; border-radius: 10px; padding: 12px 16px;
+    font-size: 14px; font-weight: 600; cursor: pointer; width: 100%;
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary { background: var(--pink); color: #fff; }
+  .btn-row { margin-top: 20px; }
+  .hint { font-size: 12px; color: var(--sub); margin-top: 5px; line-height:1.6; }
+  .hint.ok { color: var(--ok); }
+  .hint.bad { color: var(--err); }
+  .hidden { display: none; }
+  .preview {
+    font-size: 12px; color: var(--sub); background: #F7F2ED;
+    border-radius: 8px; padding: 8px 10px; margin-top: 6px;
+    word-break: break-all;
+  }
+  .done { text-align:center; padding: 40px 10px; }
+  .done .icon { font-size: 40px; margin-bottom: 12px; }
+  .done h2 { font-size: 17px; margin: 0 0 10px; }
+  .done p { color: var(--sub); font-size: 13px; line-height: 1.8; margin: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>갈등 조정 도구 사용 신청</h1>
+  <div class="sub">
+    선생님별로 <strong>개인 전용 링크</strong>와 <strong>별도 스프레드시트</strong>가 발급돼.<br>
+    다른 선생님의 사건은 서로 볼 수 없어.
+  </div>
+
+  <div id="formCard" class="card">
+    <label>이름 <span class="req">*</span></label>
+    <input id="fName" placeholder="예: 신영현" maxlength="30">
+
+    <label>이메일 <span class="req">*</span></label>
+    <input id="fEmail" type="email" placeholder="예: teacher@school.kr" maxlength="80">
+
+    <label>학교 (선택)</label>
+    <input id="fSchool" placeholder="예: 대영중학교" maxlength="40">
+
+    <label>원하는 접속 코드 <span class="req">*</span></label>
+    <input id="fToken" placeholder="예: hyonnie, lee_daeyoung" maxlength="30" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div id="tokenHint" class="hint">영소문자 · 숫자 · <code>_</code> · <code>-</code> 만 사용, 3~30자.</div>
+    <div id="linkPreview" class="preview hidden"></div>
+
+    <label>신청 이유 (선택)</label>
+    <textarea id="fReason" placeholder="어떤 용도로 쓰려는지 간단히 적어줘" maxlength="300"></textarea>
+
+    <div class="btn-row">
+      <button id="submitBtn" class="btn-primary" onclick="submitRequest()">신청하기</button>
+    </div>
+    <div id="formError" class="hint bad hidden"></div>
+  </div>
+
+  <div id="doneCard" class="card done hidden">
+    <div class="icon">📮</div>
+    <h2>신청이 접수됐어</h2>
+    <p>
+      관리자가 승인하면 <strong id="doneEmail"></strong> 로<br>
+      개인 접속 링크가 전달될 거야.<br><br>
+      조금만 기다려줘.
+    </p>
+  </div>
+
+</div>
+
+<script>
+// ===== CONFIG: deploy 전에 이 한 줄만 바꿔줘 (index.html에도 같은 값) =====
+const GAS_URL = 'PASTE_YOUR_GAS_EXEC_URL_HERE';
+// ========================================================================
+
+const TOKEN_PATTERN = /^[a-z0-9_-]{3,30}$/;
+
+// Mirrors the server's rejection reasons so the user sees why, not just "no".
+const REASON_TEXT = {
+  token_required: '접속 코드를 입력해줘.',
+  token_format_invalid: '영소문자·숫자·_·- 만 쓸 수 있고, 3~30자여야 해.',
+  token_reserved: '시스템 예약어라 쓸 수 없어. 다른 코드를 골라줘.',
+  token_taken: '이미 쓰이고 있는 코드야. 다른 걸로 해줘.',
+  missing_fields: '이름과 이메일은 꼭 입력해줘.'
+};
+
+let tokenState = 'empty'; // empty | checking | ok | bad
+let debounceTimer = null;
+
+const tokenInput = document.getElementById('fToken');
+const tokenHint = document.getElementById('tokenHint');
+const linkPreview = document.getElementById('linkPreview');
+
+function appBaseUrl() {
+  // request.html -> index.html, whatever directory this is served from
+  return location.href.split('?')[0].replace(/request\.html.*$/, 'index.html');
+}
+
+async function post(action, payload) {
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    // text/plain avoids the GAS CORS preflight problem
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, ...payload })
+  });
+  return res.json();
+}
+
+function setTokenHint(state, msg) {
+  tokenState = state;
+  tokenInput.classList.toggle('ok', state === 'ok');
+  tokenInput.classList.toggle('bad', state === 'bad');
+  tokenHint.className = 'hint' + (state === 'ok' ? ' ok' : state === 'bad' ? ' bad' : '');
+  tokenHint.textContent = msg;
+  linkPreview.classList.toggle('hidden', state !== 'ok');
+  if (state === 'ok') {
+    linkPreview.textContent = '내 링크: ' + appBaseUrl() + '?t=' + tokenInput.value.trim().toLowerCase();
+  }
+}
+
+tokenInput.addEventListener('input', () => {
+  // normalize as the user types; the server lowercases anyway
+  const raw = tokenInput.value.trim().toLowerCase();
+  if (tokenInput.value !== raw) tokenInput.value = raw;
+
+  clearTimeout(debounceTimer);
+
+  if (!raw) { setTokenHint('empty', '영소문자 · 숫자 · _ · - 만 사용, 3~30자.'); return; }
+  if (!TOKEN_PATTERN.test(raw)) {
+    setTokenHint('bad', REASON_TEXT.token_format_invalid);
+    return;
+  }
+
+  setTokenHint('checking', '사용 가능한지 확인 중...');
+  debounceTimer = setTimeout(async () => {
+    const typed = tokenInput.value.trim().toLowerCase();
+    try {
+      const data = await post('checkTokenAvailable', { token: typed });
+      // a newer keystroke may have landed while we were waiting
+      if (typed !== tokenInput.value.trim().toLowerCase()) return;
+      if (data.available) setTokenHint('ok', '사용할 수 있는 코드야 ✓');
+      else setTokenHint('bad', REASON_TEXT[data.reason] || '이 코드는 사용할 수 없어.');
+    } catch (e) {
+      setTokenHint('bad', '확인에 실패했어. 잠시 뒤 다시 시도해줘.');
+    }
+  }, 300);
+});
+
+function showFormError(msg) {
+  const el = document.getElementById('formError');
+  el.textContent = msg;
+  el.classList.toggle('hidden', !msg);
+}
+
+async function submitRequest() {
+  const teacherName = document.getElementById('fName').value.trim();
+  const email = document.getElementById('fEmail').value.trim();
+  const school = document.getElementById('fSchool').value.trim();
+  const requestedToken = tokenInput.value.trim().toLowerCase();
+  const reason = document.getElementById('fReason').value.trim();
+
+  showFormError('');
+
+  if (!teacherName || !email) { showFormError(REASON_TEXT.missing_fields); return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showFormError('이메일 형식을 확인해줘.'); return; }
+  if (tokenState !== 'ok') { showFormError('접속 코드가 사용 가능한지 먼저 확인해줘.'); return; }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '보내는 중...';
+
+  try {
+    const data = await post('requestAccess', {
+      teacherName, email, school, requestedToken, reason
+    });
+    if (data.error) {
+      showFormError(REASON_TEXT[data.error] || ('신청 실패: ' + data.error));
+      btn.disabled = false;
+      btn.textContent = '신청하기';
+      return;
+    }
+    document.getElementById('doneEmail').textContent = email;
+    document.getElementById('formCard').classList.add('hidden');
+    document.getElementById('doneCard').classList.remove('hidden');
+  } catch (e) {
+    showFormError('네트워크 오류야. 잠시 뒤 다시 시도해줘.');
+    btn.disabled = false;
+    btn.textContent = '신청하기';
+  }
+}
+</script>
+</body>
+</html>

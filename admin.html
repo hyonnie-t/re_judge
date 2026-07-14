@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>갈등 조정 도구 · 관리자</title>
+<style>
+  :root {
+    --bg: #FBF3EC;
+    --card: #FFFFFF;
+    --pink: #F0728C;
+    --pink-soft: #FDE4E9;
+    --ink: #3A2E2A;
+    --sub: #8A7A73;
+    --line: #EFE2D8;
+    --ok: #7CA982;
+    --ok-soft: #E7F1E5;
+    --warn: #E0A94B;
+    --warn-soft: #FDECD3;
+    --err: #D9534F;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+    padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--sub); font-size: 13px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 4px; }
+  .card .card-sub { font-size: 12px; color: var(--sub); margin-bottom: 12px; }
+  label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; }
+  input, select {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    background: #FFFDFB;
+  }
+  button {
+    border: none; border-radius: 10px; padding: 10px 16px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn-primary { background: var(--pink); color: #fff; }
+  .btn-secondary { background: var(--pink-soft); color: var(--pink); }
+  .btn-ghost { background: transparent; color: var(--sub); border: 1px solid var(--line); }
+  .btn-ok { background: var(--ok-soft); color: #4F7A57; }
+  .btn-danger { background: #FBE7E6; color: var(--err); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .top-nav { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; gap: 12px; }
+  .back { font-size: 13px; color: var(--sub); cursor: pointer; white-space: nowrap; }
+  .hidden { display: none; }
+  .loading { font-size: 13px; color: var(--sub); }
+
+  .row {
+    border-bottom: 1px solid var(--line);
+    padding: 14px 2px;
+  }
+  .row:last-child { border-bottom: none; }
+  .row-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .row-name { font-weight: 600; font-size: 14px; }
+  .row-meta { font-size: 12px; color: var(--sub); margin-top: 3px; line-height: 1.6; }
+  .row-reason { font-size: 12px; color: var(--sub); margin-top: 6px; background: #F7F2ED; border-radius: 8px; padding: 8px 10px; }
+  .tok { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+         background: #F7F2ED; border-radius: 6px; padding: 2px 7px; }
+  .pill { font-size: 11px; padding: 3px 9px; border-radius: 999px; white-space: nowrap; font-weight: 600; }
+  .pill.active { background: var(--ok-soft); color: #4F7A57; }
+  .pill.suspended { background: var(--warn-soft); color: #B67C25; }
+
+  .approve-box { margin-top: 10px; background: #FFFDFB; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .approve-box .inline { display: flex; gap: 8px; align-items: center; }
+  .approve-box input { flex: 1; font-size: 13px; padding: 8px 10px; }
+  .link-box { display: flex; gap: 8px; margin-top: 8px; }
+  .link-box input { flex: 1; background: #F7F2ED; font-size: 12px; }
+  .msg { font-size: 12px; margin-top: 6px; }
+  .msg.ok { color: #4F7A57; }
+  .msg.bad { color: var(--err); }
+  .banner { background: var(--ok-soft); border-radius: 10px; padding: 10px 12px; font-size: 12px; color: #4F7A57; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 관리자 키 입력 -->
+  <div id="setupKey" class="card">
+    <h2>관리자 인증</h2>
+    <div class="card-sub">GAS 배포 URL과 ADMIN_KEY를 입력해줘. (이 브라우저에 저장돼)</div>
+    <label>GAS 배포 URL</label>
+    <input id="gasUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
+    <label>관리자 키</label>
+    <input id="adminKeyInput" type="password" placeholder="ADMIN_KEY">
+    <label>내 접속 코드 (사건 관리용, 선택)</label>
+    <input id="myTokenInput" placeholder="예: hyonnie">
+    <div id="setupError" class="msg bad hidden"></div>
+    <div class="btn-row"><button class="btn-primary" onclick="saveConfig()">저장하고 시작</button></div>
+  </div>
+
+  <!-- 관리 화면 -->
+  <div id="app" class="hidden">
+    <div class="top-nav">
+      <div>
+        <h1>관리자</h1>
+        <div class="sub">사용 신청 승인 · 선생님 계정 관리</div>
+      </div>
+      <span class="back" onclick="resetConfig()">키 변경</span>
+    </div>
+
+    <div id="myCasesCard" class="card hidden">
+      <h2>내 사건 관리</h2>
+      <div class="card-sub">관리자도 사건 관리는 일반 사용자 화면에서 해.</div>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goMyCases()">내 사건 화면 열기 →</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>신청 대기 <span id="pendingCount" class="sub" style="font-weight:400;"></span></h2>
+      <div class="card-sub">승인하면 그 선생님 전용 스프레드시트가 자동으로 만들어져.</div>
+      <div id="pendingList" class="loading">불러오는 중...</div>
+    </div>
+
+    <div class="card">
+      <h2>승인된 선생님 <span id="teacherCount" class="sub" style="font-weight:400;"></span></h2>
+      <div class="card-sub">정지하면 그 링크로 더 이상 접속할 수 없어. 삭제해도 스프레드시트 자체는 남아.</div>
+      <div id="teacherList" class="loading">불러오는 중...</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let GAS_URL   = localStorage.getItem('mediator_gas_url') || '';
+let ADMIN_KEY = localStorage.getItem('mediator_admin_key') || '';
+let MY_TOKEN  = localStorage.getItem('mediator_my_token') || '';
+
+const REASON_TEXT = {
+  token_required: '접속 코드가 비어 있어.',
+  token_format_invalid: '코드 형식이 잘못됐어 (영소문자·숫자·_·-, 3~30자).',
+  token_reserved: '예약어라 쓸 수 없는 코드야.',
+  token_taken: '이미 사용 중인 코드야. 다른 코드로 오버라이드해줘.',
+  pending_not_found: '해당 신청을 찾을 수 없어.',
+  not_pending: '이미 처리된 신청이야.',
+  teacher_not_found: '해당 선생님을 찾을 수 없어.'
+};
+
+// index.html lives next to admin.html, whatever directory this is served from
+function appBaseUrl() {
+  return location.href.split('?')[0].replace(/admin\.html.*$/, 'index.html');
+}
+function teacherLink(token) {
+  return appBaseUrl() + '?t=' + token;
+}
+
+async function api(action, payload) {
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    // text/plain avoids the GAS CORS preflight problem
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, adminKey: ADMIN_KEY, ...(payload || {}) })
+  });
+  return res.json();
+}
+
+async function saveConfig() {
+  const url = document.getElementById('gasUrlInput').value.trim();
+  const key = document.getElementById('adminKeyInput').value.trim();
+  const my  = document.getElementById('myTokenInput').value.trim().toLowerCase();
+  const err = document.getElementById('setupError');
+  err.classList.add('hidden');
+
+  if (!url || !key) { err.textContent = 'URL과 키를 모두 입력해줘.'; err.classList.remove('hidden'); return; }
+
+  GAS_URL = url; ADMIN_KEY = key; MY_TOKEN = my;
+
+  // verify before persisting, so a wrong key never gets stored
+  let ping;
+  try { ping = await api('adminPing', {}); }
+  catch (e) { err.textContent = 'GAS URL에 연결하지 못했어. 주소를 확인해줘.'; err.classList.remove('hidden'); return; }
+
+  if (!ping.ok) { err.textContent = '관리자 키가 맞지 않아.'; err.classList.remove('hidden'); return; }
+
+  localStorage.setItem('mediator_gas_url', GAS_URL);
+  localStorage.setItem('mediator_admin_key', ADMIN_KEY);
+  localStorage.setItem('mediator_my_token', MY_TOKEN);
+  boot();
+}
+
+function resetConfig() {
+  localStorage.removeItem('mediator_gas_url');
+  localStorage.removeItem('mediator_admin_key');
+  localStorage.removeItem('mediator_my_token');
+  location.reload();
+}
+
+function goMyCases() {
+  window.open(teacherLink(MY_TOKEN), '_blank');
+}
+
+function boot() {
+  document.getElementById('setupKey').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('myCasesCard').classList.toggle('hidden', !MY_TOKEN);
+  loadPending();
+  loadTeachers();
+}
+
+// ===== 신청 대기 =====
+
+async function loadPending() {
+  const el = document.getElementById('pendingList');
+  el.className = 'loading';
+  el.textContent = '불러오는 중...';
+
+  const data = await api('listPending', {});
+  const rows = data.pending || [];
+  document.getElementById('pendingCount').textContent = rows.length ? `· ${rows.length}건` : '';
+
+  if (!rows.length) {
+    el.className = '';
+    el.innerHTML = '<div class="sub">대기 중인 신청이 없어.</div>';
+    return;
+  }
+
+  el.className = '';
+  el.innerHTML = rows.map(r => `
+    <div class="row" data-rid="${escapeAttr(r.requestId)}">
+      <div class="row-head">
+        <div>
+          <div class="row-name">${escapeHtml(r.teacherName)}</div>
+          <div class="row-meta">
+            ${escapeHtml(r.email)}${r.school ? ' · ' + escapeHtml(r.school) : ''}<br>
+            요청 코드 <span class="tok">${escapeHtml(r.requestedToken)}</span> · ${fmtDate(r.createdAt)}
+          </div>
+        </div>
+      </div>
+      ${r.reason ? `<div class="row-reason">${escapeHtml(r.reason)}</div>` : ''}
+      <div class="approve-box">
+        <div class="inline">
+          <input class="ov-token" placeholder="코드 변경 (비우면 요청 코드 그대로)" value="">
+          <button class="btn-ok btn-sm" data-act="approve">승인</button>
+          <button class="btn-ghost btn-sm" data-act="reject">거절</button>
+        </div>
+        <div class="msg"></div>
+        <div class="link-box hidden">
+          <input class="issued-link" readonly>
+          <button class="btn-ghost btn-sm" data-act="copy">복사</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // event delegation: no inline handlers carrying data
+  el.querySelectorAll('.row').forEach(row => {
+    row.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const act = btn.getAttribute('data-act');
+      const requestId = row.getAttribute('data-rid');
+      const msg = row.querySelector('.msg');
+
+      if (act === 'copy') {
+        const inp = row.querySelector('.issued-link');
+        inp.select(); document.execCommand('copy');
+        msg.className = 'msg ok'; msg.textContent = '링크를 복사했어.';
+        return;
+      }
+
+      if (act === 'reject') {
+        if (!confirm('이 신청을 거절할까?')) return;
+        const res = await api('rejectPending', { requestId });
+        if (res.error) { msg.className = 'msg bad'; msg.textContent = REASON_TEXT[res.error] || res.error; return; }
+        loadPending();
+        return;
+      }
+
+      if (act === 'approve') {
+        const ov = row.querySelector('.ov-token').value.trim().toLowerCase();
+        btn.disabled = true;
+        msg.className = 'msg';
+        msg.textContent = '스프레드시트 만드는 중...';
+
+        const res = await api('approveTeacher', {
+          requestId,
+          tokenOverride: ov || undefined
+        });
+
+        if (res.error) {
+          btn.disabled = false;
+          msg.className = 'msg bad';
+          msg.textContent = REASON_TEXT[res.error] || ('실패: ' + res.error);
+          return;
+        }
+
+        // approved: show the issued link right here, don't wipe the row yet
+        const link = teacherLink(res.token);
+        msg.className = 'msg ok';
+        msg.textContent = `승인 완료 · ${res.teacherName} 님 링크를 전달해줘.`;
+        const lb = row.querySelector('.link-box');
+        lb.classList.remove('hidden');
+        row.querySelector('.issued-link').value = link;
+        row.querySelectorAll('button[data-act="approve"], button[data-act="reject"]').forEach(b => b.remove());
+        row.querySelector('.ov-token').remove();
+        loadTeachers();
+      }
+    });
+  });
+}
+
+// ===== 승인된 선생님 =====
+
+async function loadTeachers() {
+  const el = document.getElementById('teacherList');
+  el.className = 'loading';
+  el.textContent = '불러오는 중...';
+
+  const data = await api('listTeachers', {});
+  const rows = data.teachers || [];
+  document.getElementById('teacherCount').textContent = rows.length ? `· ${rows.length}명` : '';
+
+  if (!rows.length) {
+    el.className = '';
+    el.innerHTML = '<div class="sub">승인된 선생님이 없어.</div>';
+    return;
+  }
+
+  el.className = '';
+  el.innerHTML = rows.map(r => {
+    const suspended = r.status !== 'active';
+    return `
+    <div class="row" data-token="${escapeAttr(r.token)}">
+      <div class="row-head">
+        <div>
+          <div class="row-name">${escapeHtml(r.teacherName || '(이름 없음)')}</div>
+          <div class="row-meta">
+            ${escapeHtml(r.email || '')}${r.note ? ' · ' + escapeHtml(r.note) : ''}<br>
+            <span class="tok">${escapeHtml(r.token)}</span> · ${fmtDate(r.createdAt)}
+          </div>
+        </div>
+        <span class="pill ${suspended ? 'suspended' : 'active'}">${suspended ? '정지' : '활성'}</span>
+      </div>
+      <div class="link-box">
+        <input class="tlink" readonly value="${escapeAttr(teacherLink(r.token))}">
+        <button class="btn-ghost btn-sm" data-act="copy">복사</button>
+      </div>
+      <div class="btn-row">
+        ${suspended
+          ? '<button class="btn-ok btn-sm" data-act="reinstate">복구</button>'
+          : '<button class="btn-ghost btn-sm" data-act="revoke">정지</button>'}
+        <button class="btn-danger btn-sm" data-act="delete">목록에서 삭제</button>
+      </div>
+      <div class="msg"></div>
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('.row').forEach(row => {
+    row.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const act = btn.getAttribute('data-act');
+      const token = row.getAttribute('data-token');
+      const msg = row.querySelector('.msg');
+
+      if (act === 'copy') {
+        const inp = row.querySelector('.tlink');
+        inp.select(); document.execCommand('copy');
+        msg.className = 'msg ok'; msg.textContent = '링크를 복사했어.';
+        return;
+      }
+      if (act === 'revoke') {
+        if (!confirm(`${token} 접속을 정지할까?`)) return;
+        await api('revokeTeacher', { token });
+        loadTeachers();
+        return;
+      }
+      if (act === 'reinstate') {
+        await api('reinstateTeacher', { token });
+        loadTeachers();
+        return;
+      }
+      if (act === 'delete') {
+        if (!confirm(`${token} 을 목록에서 삭제할까?\n스프레드시트는 남지만 접속은 완전히 끊겨.`)) return;
+        await api('deleteTeacher', { token });
+        loadTeachers();
+      }
+    });
+  });
+}
+
+// ===== utils =====
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return escapeHtml(String(iso));
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function escapeAttr(str) { return escapeHtml(str); }
+
+if (GAS_URL && ADMIN_KEY) boot();
+</script>
+</body>
+</html>
