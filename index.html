@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>갈등 조정 도구 · 관리자</title>
+<title>갈등 조정 도구</title>
 <style>
   :root {
     --bg: #FBF3EC;
@@ -122,28 +122,55 @@
   .verdict ul { margin:4px 0; padding-left:18px; }
   .verdict .comment { margin-top:12px; font-style:italic; }
   .verdict.counsel .comment { font-style:normal; }
+
+  /* gate screens */
+  .gate { text-align:center; padding:56px 20px; }
+  .gate .icon { font-size:36px; margin-bottom:12px; }
+  .gate h2 { font-size:17px; margin:0 0 8px; }
+  .gate p { color:var(--sub); font-size:13px; line-height:1.7; margin:0 0 18px; }
+  .gate a.btn-link {
+    display:inline-block; background:var(--pink); color:#fff; text-decoration:none;
+    border-radius:10px; padding:10px 18px; font-size:14px; font-weight:600;
+  }
+  .token-tag { font-size:11px; color:var(--sub); background:#F7F2ED; border-radius:999px; padding:3px 10px; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <div id="setupKey" class="card">
-    <h2>관리자 키 입력</h2>
-    <p class="sub" style="margin-top:-4px;">GAS 배포 시 설정한 ADMIN_KEY, GAS_URL을 입력해줘. (한 번 저장하면 이 브라우저에서 계속 유지돼)</p>
-    <label>GAS 배포 URL</label>
-    <input id="gasUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
-    <label>관리자 키</label>
-    <input id="adminKeyInput" type="password" placeholder="ADMIN_KEY">
-    <div class="btn-row"><button class="btn-primary" onclick="saveConfig()">저장하고 시작</button></div>
+  <!-- 부팅 중 -->
+  <div id="gateLoading" class="card gate">
+    <div class="icon">⏳</div>
+    <h2>확인 중...</h2>
+    <p>접속 링크를 확인하고 있어.</p>
   </div>
 
+  <!-- 토큰 없음 -->
+  <div id="gateNoToken" class="card gate hidden">
+    <div class="icon">🔑</div>
+    <h2>접속 링크가 필요해</h2>
+    <p>이 도구는 선생님별 개인 링크로만 들어올 수 있어.<br>
+       아직 링크가 없다면 아래에서 사용 신청을 해줘.</p>
+    <a class="btn-link" href="request.html">사용 신청하기</a>
+  </div>
+
+  <!-- 토큰 무효 -->
+  <div id="gateBadToken" class="card gate hidden">
+    <div class="icon">🚫</div>
+    <h2>유효하지 않은 링크야</h2>
+    <p>링크가 잘못됐거나, 사용 권한이 정지된 상태일 수 있어.<br>
+       관리자에게 문의하거나 다시 신청해줘.</p>
+    <a class="btn-link" href="request.html">사용 신청하기</a>
+  </div>
+
+  <!-- 본 화면 -->
   <div id="app" class="hidden">
     <div class="top-nav">
       <div>
         <h1>학생 갈등 조정 도구</h1>
         <div class="sub">교사 전용 · 학생에게는 승인된 결과만 전달돼</div>
       </div>
-      <span class="back" onclick="resetConfig()">키 변경</span>
+      <span id="tokenTag" class="token-tag"></span>
     </div>
 
     <!-- 목록 화면 -->
@@ -227,6 +254,10 @@
             <button class="btn-ghost" onclick="copyLink()">복사</button>
           </div>
         </div>
+
+        <div class="btn-row">
+          <button class="btn-ghost btn-sm" onclick="deleteCase()">이 사건 삭제</button>
+        </div>
       </div>
     </div>
   </div>
@@ -234,29 +265,26 @@
 </div>
 
 <script>
-let GAS_URL = localStorage.getItem('mediator_gas_url') || '';
-let ADMIN_KEY = localStorage.getItem('mediator_admin_key') || '';
+// ===== CONFIG: deploy 전에 이 한 줄만 바꿔줘 (request.html에도 같은 값) =====
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbz55gU3cezUX8Mp9NmqrWw0czOOUr96-kyyqM77Mg0CCxV8ck419PflgeOTi_MT_gkd/exec';
+// =========================================================================
+
+// Token comes from the query string only. No localStorage, no key input.
+// The link itself is the credential.
+const TEACHER_TOKEN = new URLSearchParams(location.search).get('t') || '';
+
 let currentCaseId = null;
 let currentDraft = null;
 let currentMeta = { caseNumber: '', group: '' };
 let currentSeverity = '보통';
-let finalTextDirty = false; // becomes true if the teacher edits finalText manually
+let finalTextDirty = false;
 
 const SEV_CLASS = { '가벼움': 'light', '보통': 'normal', '무거움': 'heavy' };
 
-function saveConfig() {
-  GAS_URL = document.getElementById('gasUrlInput').value.trim();
-  ADMIN_KEY = document.getElementById('adminKeyInput').value.trim();
-  if (!GAS_URL || !ADMIN_KEY) { alert('URL과 키를 모두 입력해줘'); return; }
-  localStorage.setItem('mediator_gas_url', GAS_URL);
-  localStorage.setItem('mediator_admin_key', ADMIN_KEY);
-  boot();
-}
-
-function resetConfig() {
-  localStorage.removeItem('mediator_gas_url');
-  localStorage.removeItem('mediator_admin_key');
-  location.reload();
+function show(id) {
+  ['gateLoading', 'gateNoToken', 'gateBadToken', 'app'].forEach(k => {
+    document.getElementById(k).classList.toggle('hidden', k !== id);
+  });
 }
 
 async function api(action, payload) {
@@ -264,20 +292,27 @@ async function api(action, payload) {
     method: 'POST',
     // text/plain avoids the GAS CORS preflight problem
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, adminKey: ADMIN_KEY, ...payload })
+    body: JSON.stringify({ action, teacherToken: TEACHER_TOKEN, ...payload })
   });
   const data = await res.json();
   if (data.error === 'unauthorized') {
-    alert('관리자 키가 맞지 않아. 다시 설정해줘.');
-    resetConfig();
+    show('gateBadToken');
     throw new Error('unauthorized');
   }
   return data;
 }
 
-function boot() {
-  document.getElementById('setupKey').classList.add('hidden');
-  document.getElementById('app').classList.remove('hidden');
+// Validate the token once at boot with a cheap ping, then reveal the app.
+async function boot() {
+  if (!TEACHER_TOKEN) { show('gateNoToken'); return; }
+  try {
+    const ping = await api('teacherPing', {});
+    if (!ping.ok) { show('gateBadToken'); return; }
+  } catch (e) {
+    return; // api() already switched to the bad-token screen
+  }
+  document.getElementById('tokenTag').textContent = '@' + TEACHER_TOKEN;
+  show('app');
   loadList();
 }
 
@@ -479,7 +514,6 @@ function showDraft(existingFinalText) {
 
   renderTeacherNote(currentDraft);
 
-  // student-facing verdict is a preview: keep it hidden until asked
   const va = document.getElementById('verdictArea');
   va.classList.add('hidden');
   va.innerHTML = '';
@@ -492,8 +526,7 @@ function showDraft(existingFinalText) {
   document.getElementById('approveArea').classList.remove('hidden');
 }
 
-// Teacher-only memo (never shown to students). Distinct role from the verdict:
-// only out-of-band info (discrepancies, extra checks, rule review). Empty -> "특이사항 없음".
+// Teacher-only memo (never shown to students).
 function renderTeacherNote(draft) {
   const note = (draft.teacherNote || '').trim();
   const el = document.getElementById('memoArea');
@@ -524,12 +557,9 @@ function updateSevBadge() {
 async function onSeverityChange() {
   currentSeverity = document.getElementById('sevSelect').value;
   updateSevBadge();
-  // persist the override separately from the AI value
   await api('updateSeverity', { caseId: currentCaseId, severityOverride: currentSeverity });
-  // only re-render the preview if it is currently open
   const area = document.getElementById('verdictArea');
   if (!area.classList.contains('hidden')) renderVerdict();
-  // re-fill final text with the new tone unless the teacher already edited it
   if (!finalTextDirty) {
     document.getElementById('finalText').value = buildVerdictText(currentDraft, currentSeverity);
   }
@@ -569,7 +599,7 @@ function renderVerdict() {
     .map(r => `<li><strong>${esc(r.name)}</strong>: ${esc(r.action)}</li>`).join('');
   area.innerHTML = `
     <div class="verdict judge">
-      <div class="v-head">📜 대영중 갈등조정소 판결문</div>
+      <div class="v-head">📜 갈등조정소 판결문</div>
       <div class="v-meta">사건번호: ${esc(caseNo)}<br>사건명: "${esc(draft.caseName || '')}"</div>
       <h4>주문</h4>
       <div>당사자들은 서로의 입장을 이해하고, 아래 화해 처방전을 성실히 이행하여 관계를 회복할 것을 명한다.</div>
@@ -615,7 +645,7 @@ function buildVerdictText(draft, sev) {
   const common = (draft.reconciliationCommon || []).map(r => `- ${r}`).join('\n');
   const indiv = (draft.reconciliationIndividual || []).map(r => `- ${r.name}: ${r.action}`).join('\n');
   return [
-    '📜 대영중 갈등조정소 판결문',
+    '📜 갈등조정소 판결문',
     '사건번호: ' + caseNo,
     '사건명: "' + (draft.caseName || '') + '"',
     '',
@@ -658,6 +688,13 @@ async function approveCase() {
   }
 }
 
+async function deleteCase() {
+  if (!currentCaseId) return;
+  if (!confirm('이 사건을 삭제할까? 되돌릴 수 없어.')) return;
+  await api('deleteCase', { caseId: currentCaseId });
+  showList();
+}
+
 function showLink(token) {
   const url = `${GAS_URL}?token=${token}`;
   document.getElementById('linkArea').classList.remove('hidden');
@@ -675,7 +712,7 @@ function escapeHtml(str) {
 }
 function escapeAttr(str) { return escapeHtml(str); }
 
-if (GAS_URL && ADMIN_KEY) boot();
+boot();
 </script>
 </body>
 </html>
