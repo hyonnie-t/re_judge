@@ -275,11 +275,24 @@ const TEACHER_TOKEN = new URLSearchParams(location.search).get('t') || '';
 
 let currentCaseId = null;
 let currentDraft = null;
-let currentMeta = { caseNumber: '', group: '' };
+let currentMeta = { caseNumber: '', group: '', incidentSummary: '' };
 let currentSeverity = '보통';
 let finalTextDirty = false;
 
 const SEV_CLASS = { '가벼움': 'light', '보통': 'normal', '무거움': 'heavy' };
+
+// [2026-09-05 신규] history26_backend가 역사법정(his_judge_goryeo) 제출을 자동으로
+// 사건 접수할 때(courtCasePush) incidentSummary에 "역사법정"이라는 말을 항상 넣어준다
+// (buildCourtCasePayload_ 참고, 그 레포에서 확인). 여기선 그 문자열 하나로 "이건 실제
+// 갈등이 아니라 역할극 사건이다"를 판별한다 — 화면 라벨·주문 문구·심각도 처리를 실제
+// 갈등조정과 다르게 갈라 써야 하기 때문(화해가 목적이 아니라 역사적 판단을 다듬는 게
+// 목적). 새 역할극 웹앱이 늘어도 incidentSummary에 "역사법정"만 계속 포함시키면 이
+// 판별이 그대로 통한다. AI 판결문 생성 자체(서버의 generateDraft 프롬프트)도 같은
+// 문자열로 분기해야 하는데, 그건 이 레포가 아니라 재judge 자체 Apps Script 프로젝트
+// 쪽 코드라 여기서 고칠 수 없다 — 별도로 전달한 프롬프트 핸드오프 문서 참고.
+function isCourtCase() {
+  return /역사법정/.test(currentMeta.incidentSummary || '');
+}
 
 function show(id) {
   ['gateLoading', 'gateNoToken', 'gateBadToken', 'app'].forEach(k => {
@@ -437,7 +450,7 @@ async function openCase(caseId) {
   const data = await api('getCase', { caseId });
   if (data.error) { alert('사건을 불러오지 못했어'); return; }
 
-  currentMeta = { caseNumber: data.caseNumber || '', group: data.group || '' };
+  currentMeta = { caseNumber: data.caseNumber || '', group: data.group || '', incidentSummary: data.incidentSummary || '' };
 
   document.getElementById('listView').classList.add('hidden');
   document.getElementById('detailView').classList.remove('hidden');
@@ -565,10 +578,24 @@ async function onSeverityChange() {
   }
 }
 
-// Verdict preview: judge style (light/normal) vs plain counsel style (heavy).
+// [2026-09-05] 역사법정(역할극) 사건의 "주문" 문구 — 실제 갈등조정의 "화해·관계 회복"
+// 프레이밍은 역사 해석 논쟁에 안 맞아서 별도 문구를 쓴다. draft.order로 AI가 직접
+// 생성해주면 그걸 우선 쓰고(향후 generateDraft 프롬프트가 이 필드를 채워주면 자동
+// 반영됨), 아직 없으면(현재 상태) 이 기본 문구로 대체한다.
+const COURT_CASE_ORDER_FALLBACK =
+  '검사팀과 변호인팀은 각자 논거를 성실히 보강하여 더 설득력 있는 역사적 해석에 도달할 것을 명한다.';
+function verdictOrderText(draft, isCourt) {
+  if (draft.order) return draft.order;
+  if (isCourt) return COURT_CASE_ORDER_FALLBACK;
+  return '당사자들은 서로의 입장을 이해하고, 아래 화해 처방전을 성실히 이행하여 관계를 회복할 것을 명한다.';
+}
+
+// Verdict preview: judge style (light/normal, 또는 역사법정은 심각도 무관 항상 judge)
+// vs plain counsel style (heavy, 실제 갈등조정 전용).
 function renderVerdict() {
   const draft = currentDraft;
   const sev = currentSeverity;
+  const isCourt = isCourtCase();
   const area = document.getElementById('verdictArea');
   const esc = escapeHtml;
   const caseNo = currentMeta.caseNumber || '';
@@ -576,7 +603,8 @@ function renderVerdict() {
   const perspectives = (draft.perspectives || [])
     .map(p => `<li><strong>${esc(p.name)}</strong>: ${esc(p.view)}</li>`).join('');
 
-  if (sev === '무거움') {
+  // 역사법정은 역할극이라 "심각도"에 따라 상담기록으로 빠지는 게 안 맞음 — 항상 판결문 톤 유지.
+  if (sev === '무거움' && !isCourt) {
     const measures = []
       .concat((draft.reconciliationCommon || []).map(r => `<li>${esc(r)}</li>`))
       .concat((draft.reconciliationIndividual || []).map(r => `<li><strong>${esc(r.name)}</strong>: ${esc(r.action)}</li>`))
@@ -597,17 +625,27 @@ function renderVerdict() {
   const common = (draft.reconciliationCommon || []).map(r => `<li>${esc(r)}</li>`).join('');
   const indiv = (draft.reconciliationIndividual || [])
     .map(r => `<li><strong>${esc(r.name)}</strong>: ${esc(r.action)}</li>`).join('');
+  // 배심원 처방전 — 판별용 witnesses에 배심원 판결/근거/반론인지가 들어오는 역사법정
+  // 사건에 한해서만, generateDraft가 이 필드(juryPrescriptions)를 채워주면 노출.
+  // 아직 백엔드가 이 필드를 만들지 않으면 조용히 생략된다(하위호환).
+  const juryList = (isCourt && draft.juryPrescriptions && draft.juryPrescriptions.length)
+    ? `<h4>쟁점 심화 처방전 — 배심원</h4><ul>${draft.juryPrescriptions.map(j =>
+        `<li><strong>${esc(j.name)}</strong>: ${esc(j.question)}</li>`).join('')}</ul>`
+    : '';
+  const prescriptionLabel = isCourt ? '쟁점 심화 처방전' : '화해 처방전';
+  const indivLabel = isCourt ? '팀별' : '개인별';
   area.innerHTML = `
     <div class="verdict judge">
-      <div class="v-head">📜 갈등조정소 판결문</div>
+      <div class="v-head">${isCourt ? '📜 역사법정 판결문' : '📜 갈등조정소 판결문'}</div>
       <div class="v-meta">사건번호: ${esc(caseNo)}<br>사건명: "${esc(draft.caseName || '')}"</div>
       <h4>주문</h4>
-      <div>당사자들은 서로의 입장을 이해하고, 아래 화해 처방전을 성실히 이행하여 관계를 회복할 것을 명한다.</div>
+      <div>${esc(verdictOrderText(draft, isCourt))}</div>
       <h4>이유 — 1. 쟁점</h4><div>${esc(draft.issues || '')}</div>
       <h4>이유 — 2. 인정되는 사실</h4><div>${esc(draft.facts || '')}</div>
       <h4>이유 — 3. 각자의 입장</h4><ul>${perspectives}</ul>
-      <h4>화해 처방전 — 공통</h4><ul>${common}</ul>
-      <h4>화해 처방전 — 개인별</h4><ul>${indiv}</ul>
+      <h4>${prescriptionLabel} — 공통</h4><ul>${common}</ul>
+      <h4>${prescriptionLabel} — ${indivLabel}</h4><ul>${indiv}</ul>
+      ${juryList}
       <div class="comment">👩‍⚖️ 판사의 한마디 — ${esc(draft.judgeComment || '')}</div>
     </div>`;
 }
@@ -615,9 +653,10 @@ function renderVerdict() {
 // Plain-text version that becomes the student-facing final text.
 function buildVerdictText(draft, sev) {
   const caseNo = currentMeta.caseNumber || '';
+  const isCourt = isCourtCase();
   const persp = (draft.perspectives || []).map(p => `- ${p.name}: ${p.view}`).join('\n');
 
-  if (sev === '무거움') {
+  if (sev === '무거움' && !isCourt) {
     const measures = []
       .concat((draft.reconciliationCommon || []).map(r => `- ${r}`))
       .concat((draft.reconciliationIndividual || []).map(r => `- ${r.name}: ${r.action}`))
@@ -644,13 +683,18 @@ function buildVerdictText(draft, sev) {
 
   const common = (draft.reconciliationCommon || []).map(r => `- ${r}`).join('\n');
   const indiv = (draft.reconciliationIndividual || []).map(r => `- ${r.name}: ${r.action}`).join('\n');
+  const jury = (isCourt && draft.juryPrescriptions && draft.juryPrescriptions.length)
+    ? draft.juryPrescriptions.map(j => `- ${j.name}: ${j.question}`).join('\n')
+    : '';
+  const prescriptionLabel = isCourt ? '쟁점 심화 처방전' : '화해 처방전';
+  const indivLabel = isCourt ? '팀별' : '개인별';
   return [
-    '📜 갈등조정소 판결문',
+    isCourt ? '📜 역사법정 판결문' : '📜 갈등조정소 판결문',
     '사건번호: ' + caseNo,
     '사건명: "' + (draft.caseName || '') + '"',
     '',
     '【주문】',
-    '당사자들은 서로의 입장을 이해하고, 아래 화해 처방전을 성실히 이행하여 관계를 회복할 것을 명한다.',
+    verdictOrderText(draft, isCourt),
     '',
     '【이유】',
     '1. 쟁점',
@@ -662,16 +706,19 @@ function buildVerdictText(draft, sev) {
     '3. 각자의 입장',
     persp,
     '',
-    '【화해 처방전】',
+    '【' + prescriptionLabel + '】',
     '· 공통 처방',
     common,
     '',
-    '· 개인별 처방',
-    indiv,
+    '· ' + indivLabel + ' 처방',
+    indiv
+  ]
+  .concat(jury ? ['', '· 배심원에게', jury] : [])
+  .concat([
     '',
     '【판사의 한마디】',
     draft.judgeComment || ''
-  ].join('\n');
+  ]).join('\n');
 }
 
 async function approveCase() {
