@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>갈등 조정 도구</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #FBF3EC;
@@ -133,6 +136,120 @@
     border-radius:10px; padding:10px 18px; font-size:14px; font-weight:600;
   }
   .token-tag { font-size:11px; color:var(--sub); background:#F7F2ED; border-radius:999px; padding:3px 10px; }
+
+  /* ===== 역사법정 판결문 전용 디자인 (2026-09-07, 디자인 핸드오프) =====
+     실제 법원 판결문 서식(무채색+붉은 관인 포인트, 여백 많음, 명조체)을 참고.
+     기존 .verdict.judge/.counsel(실제 갈등조정용)은 그대로 두고, 역사법정
+     사건(isCourt)에서만 이 .court-verdict 트리를 새로 그린다 — renderVerdict()의
+     분기 참고. 토큰을 cv- 접두사로 분리해서 기존 --pink 등 갈등조정 테마와
+     충돌하지 않게 함. */
+  :root {
+    --cv-paper: #FAFAF7;
+    --cv-ink: #1C1C1C;
+    --cv-line: #D8D5CC;
+    --cv-red: #B5342A;
+    --cv-navy: #3A4A63;
+    --cv-brown: #5C4A38;
+    --cv-muted: #6B6B63;
+  }
+  .court-verdict {
+    position: relative;
+    overflow: hidden;
+    background: var(--cv-paper);
+    border: 1px solid var(--cv-line);
+    border-radius: 4px;
+    margin-top: 12px;
+    color: var(--cv-ink);
+    font-family: "Noto Serif KR", "Apple SD Gothic Neo", serif;
+  }
+  .cv-watermark {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 260px;
+    line-height: 1;
+    color: var(--cv-ink);
+    opacity: .035;
+    pointer-events: none;
+    z-index: 0;
+    user-select: none;
+  }
+  .cv-inner { position: relative; z-index: 1; padding: 28px 22px 32px; }
+  .cv-header-bar {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-align: center;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--cv-line);
+  }
+  .cv-meta { text-align: center; margin: 14px 0 22px; }
+  .cv-case-no {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+    font-size: 12px;
+    color: var(--cv-muted);
+    letter-spacing: .5px;
+  }
+  .cv-case-name { font-size: 25px; font-weight: 500; margin-top: 4px; }
+  .cv-section { padding: 20px 0; border-top: 1px solid var(--cv-line); }
+  .cv-section:first-of-type { border-top: none; padding-top: 0; }
+  .cv-label {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+    font-size: 21px;
+    font-weight: 700;
+    margin: 0 0 12px;
+    letter-spacing: 1px;
+  }
+  .cv-label--red { color: var(--cv-red); margin-bottom: 0; }
+  .cv-sublabel {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cv-muted);
+    margin: 16px 0 6px;
+    letter-spacing: .5px;
+  }
+  .cv-sublabel:first-of-type { margin-top: 0; }
+  .cv-body { font-size: 17px; line-height: 1.85; margin: 0; text-align: left; }
+  .cv-body ul { margin: 4px 0; padding-left: 20px; }
+  .cv-body li { margin: 4px 0; }
+  .cv-parties { display: grid; grid-template-columns: 1fr; gap: 20px; }
+  @media (min-width: 640px) {
+    .cv-parties { grid-template-columns: 1fr 1fr; }
+  }
+  .cv-party { padding-left: 14px; border-left: 3px solid var(--cv-line); }
+  .cv-party--prosecution { border-left-color: var(--cv-navy); }
+  .cv-party--defense { border-left-color: var(--cv-brown); }
+  .cv-party-label {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    margin: 0 0 8px;
+  }
+  .cv-party--prosecution .cv-party-label { color: var(--cv-navy); }
+  .cv-party--defense .cv-party-label { color: var(--cv-brown); }
+  .cv-jury { margin-top: 18px; }
+  .cv-verdict-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .cv-stamp {
+    flex: 0 0 auto;
+    opacity: 0;
+    transform: scale(.9);
+    transition: opacity 200ms ease, transform 200ms ease;
+  }
+  .cv-stamp.cv-stamp--in { opacity: 1; transform: scale(1); }
+  .cv-verdict-text { margin-top: 8px; }
+  .cv-comment-text { font-style: italic; }
+  .emphasis { color: var(--cv-red); font-weight: 700; font-style: normal; }
+  @media (max-width: 480px) {
+    .cv-inner { padding: 22px 16px 26px; }
+    .cv-case-name { font-size: 24px; }
+    .cv-label { font-size: 20px; }
+    .cv-body { font-size: 16px; }
+    .cv-watermark { font-size: 190px; }
+  }
 </style>
 </head>
 <body>
@@ -589,8 +706,10 @@ function verdictOrderText(isCourt) {
   return '당사자들은 서로의 입장을 이해하고, 아래 화해 처방전을 성실히 이행하여 관계를 회복할 것을 명한다.';
 }
 
-// Verdict preview: judge style (light/normal, 또는 역사법정은 심각도 무관 항상 judge)
-// vs plain counsel style (heavy, 실제 갈등조정 전용).
+// Verdict preview: judge style (light/normal) vs plain counsel style (heavy) —
+// 실제 갈등조정 전용. 역사법정 사건(isCourt)은 renderCourtVerdictHtml_로 완전히
+// 별도 렌더링한다(2026-09-07 디자인 핸드오프 — 격식 있는 판결문 룩). 이 함수는
+// 그 갈림길 역할만 하고, 갈등조정 쪽 로직/마크업은 그대로 둔다.
 function renderVerdict() {
   const draft = currentDraft;
   const sev = currentSeverity;
@@ -599,11 +718,16 @@ function renderVerdict() {
   const esc = escapeHtml;
   const caseNo = currentMeta.caseNumber || '';
 
+  if (isCourt) {
+    area.innerHTML = renderCourtVerdictHtml_(draft, caseNo);
+    mountCourtVerdictEffects_(area);
+    return;
+  }
+
   const perspectives = (draft.perspectives || [])
     .map(p => `<li><strong>${esc(p.name)}</strong>: ${esc(p.view)}</li>`).join('');
 
-  // 역사법정은 역할극이라 "심각도"에 따라 상담기록으로 빠지는 게 안 맞음 — 항상 판결문 톤 유지.
-  if (sev === '무거움' && !isCourt) {
+  if (sev === '무거움') {
     const measures = []
       .concat((draft.reconciliationCommon || []).map(r => `<li>${esc(r)}</li>`))
       .concat((draft.reconciliationIndividual || []).map(r => `<li><strong>${esc(r.name)}</strong>: ${esc(r.action)}</li>`))
@@ -621,76 +745,183 @@ function renderVerdict() {
     return;
   }
 
-  const prescriptionLabel = isCourt ? '쟁점 심화 처방전' : '화해 처방전';
   const common = (draft.reconciliationCommon || []).map(r => `<li>${esc(r)}</li>`).join('');
-
-  // 역사법정은 검사팀/변호인팀을 각각 별도 섹션으로 쪼개고, 배심원 처방전은
-  // 데이터가 비어있어도 헤딩 자체는 항상 노출(효니 지시: 필수 항목, 생략 금지 —
-  // 프롬프트가 빠뜨려도 화면에서 최소한 "정보 없음"으로라도 자리를 지킨다).
-  let teamSections = '';
-  let juryBlock = '';
-  let indivBlock = '';
-  let verdictBlock = '';
-
-  // [2026-09-07] juryPrescription — 3차 수정으로 배심원 처방전 스키마가 개인별
-  // 배열(juryPrescriptions)에서 종합 문단 하나(juryPrescription, 문자열)로 바뀜.
-  // 이미 승인된 옛 사건의 aiDraftJSON엔 예전 배열 형태가 그대로 남아있을 수 있어서,
-  // 새 문자열 필드가 없으면 옛 배열을 이어붙여서라도 보여주는 하위호환 처리를 둔다.
-  function juryPrescriptionText_(d) {
-    if (typeof d.juryPrescription === 'string' && d.juryPrescription.trim()) {
-      return d.juryPrescription.trim();
-    }
-    if (d.juryPrescriptions && d.juryPrescriptions.length) {
-      return d.juryPrescriptions.map(j => `${j.name}: ${j.question}`).join(' / ');
-    }
-    return '';
-  }
-
-  if (isCourt) {
-    const prosecutionActions = (draft.reconciliationIndividual || []).filter(r => r.name === '검사팀');
-    const defenseActions = (draft.reconciliationIndividual || []).filter(r => r.name === '변호인팀');
-    const prosecutionHtml = prosecutionActions.length
-      ? `<ul>${prosecutionActions.map(r => `<li>${esc(r.action)}</li>`).join('')}</ul>`
-      : `<div class="sub">검사팀 처방 없음</div>`;
-    const defenseHtml = defenseActions.length
-      ? `<ul>${defenseActions.map(r => `<li>${esc(r.action)}</li>`).join('')}</ul>`
-      : `<div class="sub">변호인팀 처방 없음</div>`;
-    teamSections =
-      `<h4>${prescriptionLabel} — 검사팀</h4>${prosecutionHtml}` +
-      `<h4>${prescriptionLabel} — 변호인팀</h4>${defenseHtml}`;
-
-    const juryText = juryPrescriptionText_(draft);
-    const juryHtml = juryText
-      ? `<div>${esc(juryText)}</div>`
-      : `<div class="sub">배심원 제출 정보 없음</div>`;
-    juryBlock = `<h4>${prescriptionLabel} — 배심원</h4>${juryHtml}`;
-
-    // [2026-09-07 신규] "판결" — 역사적 사실 확정이 아니라 "오늘 법정에서의 논증
-    // 우열"만 판단하는 섹션(verdict, 문자열). 데이터 없으면 조용히 생략.
-    if (draft.verdict) {
-      verdictBlock = `<h4>판결</h4><div>${esc(draft.verdict)}</div>`;
-    }
-  } else {
-    const indiv = (draft.reconciliationIndividual || [])
-      .map(r => `<li><strong>${esc(r.name)}</strong>: ${esc(r.action)}</li>`).join('');
-    indivBlock = `<h4>${prescriptionLabel} — 개인별</h4><ul>${indiv}</ul>`;
-  }
-
+  const indiv = (draft.reconciliationIndividual || [])
+    .map(r => `<li><strong>${esc(r.name)}</strong>: ${esc(r.action)}</li>`).join('');
   area.innerHTML = `
     <div class="verdict judge">
-      <div class="v-head">${isCourt ? '📜 역사법정 판결문' : '📜 갈등조정소 판결문'}</div>
+      <div class="v-head">📜 갈등조정소 판결문</div>
       <div class="v-meta">사건번호: ${esc(caseNo)}<br>사건명: "${esc(draft.caseName || '')}"</div>
       <h4>주문</h4>
-      <div>${esc(verdictOrderText(isCourt))}</div>
+      <div>${esc(verdictOrderText(false))}</div>
       <h4>이유 — 1. 쟁점</h4><div>${esc(draft.issues || '')}</div>
       <h4>이유 — 2. 인정되는 사실</h4><div>${esc(draft.facts || '')}</div>
       <h4>이유 — 3. 각자의 입장</h4><ul>${perspectives}</ul>
-      <h4>${prescriptionLabel} — 공통</h4><ul>${common}</ul>
-      ${teamSections}
-      ${indivBlock}
-      ${juryBlock}
-      ${verdictBlock}
+      <h4>화해 처방전 — 공통</h4><ul>${common}</ul>
+      <h4>화해 처방전 — 개인별</h4><ul>${indiv}</ul>
       <div class="comment">👩‍⚖️ 판사의 한마디 — ${esc(draft.judgeComment || '')}</div>
+    </div>`;
+}
+
+// ===== 역사법정 판결문 전용 렌더링 (2026-09-07 디자인 핸드오프) =====
+// 이 블록만 새로 추가됨 — 갈등조정 쪽 renderVerdict()/buildVerdictText() 로직은
+// 위에서 그대로 유지. 내용 로직(어떤 필드에 뭐가 들어가는지)은 3차 수정 그대로,
+// 여기선 오직 마크업/스타일만 새로 짠다.
+
+// 하위호환: 옛 사건의 aiDraftJSON엔 juryPrescriptions(배열, 개인별)만 있을 수
+// 있음(3차 수정 전 스키마). renderCourtVerdictHtml_·buildVerdictText 양쪽에서 공유.
+function juryPrescriptionText_(d) {
+  if (typeof d.juryPrescription === 'string' && d.juryPrescription.trim()) {
+    return d.juryPrescription.trim();
+  }
+  if (d.juryPrescriptions && d.juryPrescriptions.length) {
+    return d.juryPrescriptions.map(j => `${j.name}: ${j.question}`).join(' / ');
+  }
+  return '';
+}
+
+// {{강조어}} 마킹 파싱 — AI 프롬프트는 아직 이 마킹을 안 내려주지만(프롬프트 쪽
+// 지시 추가는 별도 핸드오프로 남겨둠), 나중에 나오기 시작하면 자동으로 빨간
+// 볼드로 렌더링되도록 지금 미리 준비해둔다. 마킹이 없는 일반 텍스트는 이스케이프만
+// 적용되고 그대로 나온다(안전 — 회귀 없음).
+function emphasize_(text) {
+  return escapeHtml(text).replace(/\{\{([^{}]+)\}\}/g, '<span class="emphasis">$1</span>');
+}
+
+// buildVerdictText()는 plain text(학생용 최종 문구 초안)라 <span> 마크업을 못 쓴다.
+// {{강조어}} 마킹이 언젠가 프롬프트에서 나오기 시작해도 중괄호가 그대로 노출되는
+// 사고를 막기 위해, 마킹만 벗겨내고 안의 글자만 남긴다(마킹 없는 텍스트엔 무해).
+function stripEmphasis_(text) {
+  return String(text || '').replace(/\{\{([^{}]+)\}\}/g, '$1');
+}
+
+// 관인(도장) SVG — 실제 법원 명칭·문양·서체 아님, 가상 문구("역사법정"/"지인")만 사용.
+function courtStampSvg_() {
+  return `
+    <svg class="cv-stamp" viewBox="0 0 56 56" width="52" height="52" aria-hidden="true">
+      <circle cx="28" cy="28" r="25" fill="none" stroke="#B5342A" stroke-width="2.2"/>
+      <circle cx="28" cy="28" r="19.5" fill="none" stroke="#B5342A" stroke-width="1"/>
+      <text x="28" y="25" text-anchor="middle" font-family="'Noto Serif KR', serif"
+            font-size="9" font-weight="700" fill="#B5342A">역사법정</text>
+      <text x="28" y="37" text-anchor="middle" font-family="'Noto Serif KR', serif"
+            font-size="9" font-weight="700" fill="#B5342A">지인</text>
+    </svg>`;
+}
+
+// "판결" 섹션이 스크롤로 뷰포트에 들어오면 관인이 도장 찍히듯 1회성으로 등장
+// (scale 0.9→1, 200ms). 그 외 호버·등장 애니메이션은 의도적으로 없음(브리프 지시:
+// 산발적 모션 지양). IntersectionObserver 미지원 브라우저는 즉시 보이는 걸로 폴백.
+function mountCourtVerdictEffects_(area) {
+  const stamp = area.querySelector('.cv-stamp');
+  if (!stamp) return;
+  if (typeof IntersectionObserver === 'undefined') {
+    stamp.classList.add('cv-stamp--in');
+    return;
+  }
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('cv-stamp--in');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.4 });
+  io.observe(stamp);
+}
+
+function renderCourtVerdictHtml_(draft, caseNo) {
+  const esc = escapeHtml;
+  const em = emphasize_;
+
+  const prosecutionView = (draft.perspectives || []).find(p => p.name === '검사팀');
+  const defenseView = (draft.perspectives || []).find(p => p.name === '변호인팀');
+  const prosecutionActions = (draft.reconciliationIndividual || []).filter(r => r.name === '검사팀');
+  const defenseActions = (draft.reconciliationIndividual || []).filter(r => r.name === '변호인팀');
+
+  const commonHtml = (draft.reconciliationCommon || []).length
+    ? `<ul>${draft.reconciliationCommon.map(r => `<li>${em(r)}</li>`).join('')}</ul>`
+    : `<span class="sub">공통 처방 없음</span>`;
+  const prosecutionHtml = prosecutionActions.length
+    ? `<ul>${prosecutionActions.map(r => `<li>${em(r.action)}</li>`).join('')}</ul>`
+    : `<span class="sub">검사팀 처방 없음</span>`;
+  const defenseHtml = defenseActions.length
+    ? `<ul>${defenseActions.map(r => `<li>${em(r.action)}</li>`).join('')}</ul>`
+    : `<span class="sub">변호인팀 처방 없음</span>`;
+
+  const juryText = juryPrescriptionText_(draft);
+  const verdictText = draft.verdict || '';
+
+  // "판결"은 데이터가 있을 때만 조용히 노출(3차 수정과 동일한 원칙 유지).
+  const verdictSectionHtml = verdictText ? `
+        <section class="cv-section cv-verdict-section">
+          <div class="cv-verdict-head">
+            <h3 class="cv-label cv-label--red">판결</h3>
+            ${courtStampSvg_()}
+          </div>
+          <p class="cv-body cv-verdict-text">${em(verdictText)}</p>
+        </section>` : '';
+
+  return `
+    <div class="court-verdict">
+      <div class="cv-watermark" aria-hidden="true">⚖</div>
+      <div class="cv-inner">
+        <div class="cv-header-bar">⚖ 역사법정 판결문</div>
+        <div class="cv-meta">
+          <div class="cv-case-no">사건번호 ${esc(caseNo)}</div>
+          <div class="cv-case-name">"${esc(draft.caseName || '')}"</div>
+        </div>
+
+        <section class="cv-section">
+          <h3 class="cv-label">주문</h3>
+          <p class="cv-body">${esc(verdictOrderText(true))}</p>
+        </section>
+
+        <section class="cv-section">
+          <h3 class="cv-label">이유</h3>
+          <h4 class="cv-sublabel">쟁점</h4>
+          <p class="cv-body">${em(draft.issues || '')}</p>
+          <h4 class="cv-sublabel">인정되는 사실</h4>
+          <p class="cv-body">${em(draft.facts || '')}</p>
+        </section>
+
+        <section class="cv-section">
+          <div class="cv-parties">
+            <div class="cv-party cv-party--prosecution">
+              <h4 class="cv-party-label">검사팀 입장</h4>
+              <p class="cv-body">${prosecutionView ? em(prosecutionView.view) : '<span class="sub">제출 없음</span>'}</p>
+            </div>
+            <div class="cv-party cv-party--defense">
+              <h4 class="cv-party-label">변호인팀 입장</h4>
+              <p class="cv-body">${defenseView ? em(defenseView.view) : '<span class="sub">제출 없음</span>'}</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="cv-section">
+          <h3 class="cv-label">쟁점 심화 처방전</h3>
+          <h4 class="cv-sublabel">공통</h4>
+          <div class="cv-body">${commonHtml}</div>
+          <div class="cv-parties" style="margin-top:16px;">
+            <div class="cv-party cv-party--prosecution">
+              <h4 class="cv-party-label">검사팀</h4>
+              <div class="cv-body">${prosecutionHtml}</div>
+            </div>
+            <div class="cv-party cv-party--defense">
+              <h4 class="cv-party-label">변호인팀</h4>
+              <div class="cv-body">${defenseHtml}</div>
+            </div>
+          </div>
+          <div class="cv-jury">
+            <h4 class="cv-sublabel">배심원</h4>
+            <p class="cv-body">${juryText ? em(juryText) : '<span class="sub">배심원 제출 정보 없음</span>'}</p>
+          </div>
+        </section>
+        ${verdictSectionHtml}
+        <section class="cv-section cv-comment-section">
+          <h3 class="cv-label">👩‍⚖️ 판사의 한마디</h3>
+          <p class="cv-body cv-comment-text">${em(draft.judgeComment || '')}</p>
+        </section>
+      </div>
     </div>`;
 }
 
@@ -698,7 +929,7 @@ function renderVerdict() {
 function buildVerdictText(draft, sev) {
   const caseNo = currentMeta.caseNumber || '';
   const isCourt = isCourtCase();
-  const persp = (draft.perspectives || []).map(p => `- ${p.name}: ${p.view}`).join('\n');
+  const persp = (draft.perspectives || []).map(p => `- ${p.name}: ${stripEmphasis_(p.view)}`).join('\n');
 
   if (sev === '무거움' && !isCourt) {
     const measures = []
@@ -726,25 +957,16 @@ function buildVerdictText(draft, sev) {
   }
 
   const prescriptionLabel = isCourt ? '쟁점 심화 처방전' : '화해 처방전';
-  const common = (draft.reconciliationCommon || []).map(r => `- ${r}`).join('\n');
+  const common = (draft.reconciliationCommon || []).map(r => `- ${stripEmphasis_(r)}`).join('\n');
 
-  // 하위호환: 옛 사건의 aiDraftJSON엔 juryPrescriptions(배열)만 있을 수 있음.
-  function juryPrescriptionText_(d) {
-    if (typeof d.juryPrescription === 'string' && d.juryPrescription.trim()) {
-      return d.juryPrescription.trim();
-    }
-    if (d.juryPrescriptions && d.juryPrescriptions.length) {
-      return d.juryPrescriptions.map(j => `${j.name}: ${j.question}`).join(' / ');
-    }
-    return '';
-  }
-
+  // juryPrescriptionText_(하위호환 포함)는 renderCourtVerdictHtml_ 쪽에서 top-level로
+  // 공유 정의됨(2026-09-07 디자인 핸드오프 때 중복 제거).
   let sections;
   let verdictSection = [];
   if (isCourt) {
-    const prosecutionActions = (draft.reconciliationIndividual || []).filter(r => r.name === '검사팀').map(r => `- ${r.action}`).join('\n');
-    const defenseActions = (draft.reconciliationIndividual || []).filter(r => r.name === '변호인팀').map(r => `- ${r.action}`).join('\n');
-    const juryText = juryPrescriptionText_(draft) || '(배심원 제출 정보 없음)';
+    const prosecutionActions = (draft.reconciliationIndividual || []).filter(r => r.name === '검사팀').map(r => `- ${stripEmphasis_(r.action)}`).join('\n');
+    const defenseActions = (draft.reconciliationIndividual || []).filter(r => r.name === '변호인팀').map(r => `- ${stripEmphasis_(r.action)}`).join('\n');
+    const juryText = stripEmphasis_(juryPrescriptionText_(draft)) || '(배심원 제출 정보 없음)';
     sections = [
       '· 공통 처방', common || '(없음)',
       '',
@@ -754,9 +976,9 @@ function buildVerdictText(draft, sev) {
       '',
       '· 배심원 처방', juryText
     ];
-    // [2026-09-07 신규] "판결" — 오늘 법정에서의 논증 우열만 판단(역사적 사실 확정 아님).
+    // [2026-09-07] "판결" — 오늘 법정에서의 논증 우열만 판단(역사적 사실 확정 아님).
     if (draft.verdict) {
-      verdictSection = ['', '【판결】', draft.verdict];
+      verdictSection = ['', '【판결】', stripEmphasis_(draft.verdict)];
     }
   } else {
     const indiv = (draft.reconciliationIndividual || []).map(r => `- ${r.name}: ${r.action}`).join('\n');
@@ -773,10 +995,10 @@ function buildVerdictText(draft, sev) {
     '',
     '【이유】',
     '1. 쟁점',
-    draft.issues || '',
+    stripEmphasis_(draft.issues || ''),
     '',
     '2. 인정되는 사실',
-    draft.facts || '',
+    stripEmphasis_(draft.facts || ''),
     '',
     '3. 각자의 입장',
     persp,
@@ -785,7 +1007,7 @@ function buildVerdictText(draft, sev) {
   ].concat(sections).concat(verdictSection).concat([
     '',
     '【판사의 한마디】',
-    draft.judgeComment || ''
+    stripEmphasis_(draft.judgeComment || '')
   ]).join('\n');
 }
 
