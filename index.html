@@ -630,6 +630,21 @@ function renderVerdict() {
   let teamSections = '';
   let juryBlock = '';
   let indivBlock = '';
+  let verdictBlock = '';
+
+  // [2026-09-07] juryPrescription — 3차 수정으로 배심원 처방전 스키마가 개인별
+  // 배열(juryPrescriptions)에서 종합 문단 하나(juryPrescription, 문자열)로 바뀜.
+  // 이미 승인된 옛 사건의 aiDraftJSON엔 예전 배열 형태가 그대로 남아있을 수 있어서,
+  // 새 문자열 필드가 없으면 옛 배열을 이어붙여서라도 보여주는 하위호환 처리를 둔다.
+  function juryPrescriptionText_(d) {
+    if (typeof d.juryPrescription === 'string' && d.juryPrescription.trim()) {
+      return d.juryPrescription.trim();
+    }
+    if (d.juryPrescriptions && d.juryPrescriptions.length) {
+      return d.juryPrescriptions.map(j => `${j.name}: ${j.question}`).join(' / ');
+    }
+    return '';
+  }
 
   if (isCourt) {
     const prosecutionActions = (draft.reconciliationIndividual || []).filter(r => r.name === '검사팀');
@@ -644,11 +659,17 @@ function renderVerdict() {
       `<h4>${prescriptionLabel} — 검사팀</h4>${prosecutionHtml}` +
       `<h4>${prescriptionLabel} — 변호인팀</h4>${defenseHtml}`;
 
-    const juryItems = draft.juryPrescriptions || [];
-    const juryHtml = juryItems.length
-      ? `<ul>${juryItems.map(j => `<li><strong>${esc(j.name)}</strong>: ${esc(j.question)}</li>`).join('')}</ul>`
+    const juryText = juryPrescriptionText_(draft);
+    const juryHtml = juryText
+      ? `<div>${esc(juryText)}</div>`
       : `<div class="sub">배심원 제출 정보 없음</div>`;
     juryBlock = `<h4>${prescriptionLabel} — 배심원</h4>${juryHtml}`;
+
+    // [2026-09-07 신규] "판결" — 역사적 사실 확정이 아니라 "오늘 법정에서의 논증
+    // 우열"만 판단하는 섹션(verdict, 문자열). 데이터 없으면 조용히 생략.
+    if (draft.verdict) {
+      verdictBlock = `<h4>판결</h4><div>${esc(draft.verdict)}</div>`;
+    }
   } else {
     const indiv = (draft.reconciliationIndividual || [])
       .map(r => `<li><strong>${esc(r.name)}</strong>: ${esc(r.action)}</li>`).join('');
@@ -668,6 +689,7 @@ function renderVerdict() {
       ${teamSections}
       ${indivBlock}
       ${juryBlock}
+      ${verdictBlock}
       <div class="comment">👩‍⚖️ 판사의 한마디 — ${esc(draft.judgeComment || '')}</div>
     </div>`;
 }
@@ -706,12 +728,23 @@ function buildVerdictText(draft, sev) {
   const prescriptionLabel = isCourt ? '쟁점 심화 처방전' : '화해 처방전';
   const common = (draft.reconciliationCommon || []).map(r => `- ${r}`).join('\n');
 
+  // 하위호환: 옛 사건의 aiDraftJSON엔 juryPrescriptions(배열)만 있을 수 있음.
+  function juryPrescriptionText_(d) {
+    if (typeof d.juryPrescription === 'string' && d.juryPrescription.trim()) {
+      return d.juryPrescription.trim();
+    }
+    if (d.juryPrescriptions && d.juryPrescriptions.length) {
+      return d.juryPrescriptions.map(j => `${j.name}: ${j.question}`).join(' / ');
+    }
+    return '';
+  }
+
   let sections;
+  let verdictSection = [];
   if (isCourt) {
     const prosecutionActions = (draft.reconciliationIndividual || []).filter(r => r.name === '검사팀').map(r => `- ${r.action}`).join('\n');
     const defenseActions = (draft.reconciliationIndividual || []).filter(r => r.name === '변호인팀').map(r => `- ${r.action}`).join('\n');
-    const juryItems = draft.juryPrescriptions || [];
-    const juryText = juryItems.length ? juryItems.map(j => `- ${j.name}: ${j.question}`).join('\n') : '(배심원 제출 정보 없음)';
+    const juryText = juryPrescriptionText_(draft) || '(배심원 제출 정보 없음)';
     sections = [
       '· 공통 처방', common || '(없음)',
       '',
@@ -721,6 +754,10 @@ function buildVerdictText(draft, sev) {
       '',
       '· 배심원 처방', juryText
     ];
+    // [2026-09-07 신규] "판결" — 오늘 법정에서의 논증 우열만 판단(역사적 사실 확정 아님).
+    if (draft.verdict) {
+      verdictSection = ['', '【판결】', draft.verdict];
+    }
   } else {
     const indiv = (draft.reconciliationIndividual || []).map(r => `- ${r.name}: ${r.action}`).join('\n');
     sections = ['· 공통 처방', common, '', '· 개인별 처방', indiv];
@@ -745,7 +782,7 @@ function buildVerdictText(draft, sev) {
     persp,
     '',
     '【' + prescriptionLabel + '】'
-  ].concat(sections).concat([
+  ].concat(sections).concat(verdictSection).concat([
     '',
     '【판사의 한마디】',
     draft.judgeComment || ''
